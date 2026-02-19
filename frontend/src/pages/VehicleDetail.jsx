@@ -1,0 +1,423 @@
+import { useEffect, useState, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, Plus, Trash2, Edit, CheckCircle, AlertCircle, Clock, FileText } from "lucide-react";
+import { toast } from "sonner";
+import api from "../utils/api";
+import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, getJobStyle, EXPENSE_CATEGORIES, SOURCES, CONDITIONS, FUEL_TYPES, BRANDS } from "../utils/helpers";
+
+const DocCard = ({ label, status }) => {
+  const s = getDocStyle(status);
+  const icons = { ok: CheckCircle, pending: Clock, missing: AlertCircle };
+  const Icon = icons[status] || Clock;
+  return (
+    <div className={`flex items-center gap-2.5 p-3 rounded-lg border ${s.bg} ${s.text}`}>
+      <Icon size={16} />
+      <div>
+        <div className="text-xs font-semibold uppercase tracking-wide">{label}</div>
+        <div className="text-xs capitalize">{s.label}</div>
+      </div>
+    </div>
+  );
+};
+
+export default function VehicleDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [vehicle, setVehicle] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [showJobModal, setShowJobModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [expForm, setExpForm] = useState({ category: "servicing", amount: "", description: "", date: "" });
+  const [jobForm, setJobForm] = useState({ work_description: "", mechanic_name: "", estimated_cost: "", notes: "" });
+  const [editForm, setEditForm] = useState({});
+  const [mechanics, setMechanics] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  const fetchVehicle = useCallback(async () => {
+    try {
+      const r = await api.get(`/vehicles/${id}`);
+      setVehicle(r.data);
+      setEditForm(r.data);
+    } catch { toast.error("Vehicle not found"); navigate("/inventory"); }
+    finally { setLoading(false); }
+  }, [id, navigate]);
+
+  useEffect(() => {
+    fetchVehicle();
+    api.get("/team").then(r => setMechanics(r.data.filter(m => m.role === "mechanic"))).catch(() => {});
+  }, [fetchVehicle]);
+
+  const addExpense = async (e) => {
+    e.preventDefault();
+    if (!expForm.category || !expForm.amount) { toast.error("Fill required fields"); return; }
+    setSaving(true);
+    try {
+      await api.post("/expenses", { vehicle_id: id, ...expForm, amount: Number(expForm.amount) });
+      toast.success("Expense added"); setShowExpenseModal(false);
+      setExpForm({ category: "servicing", amount: "", description: "", date: "" });
+      fetchVehicle();
+    } catch { toast.error("Failed to add expense"); } finally { setSaving(false); }
+  };
+
+  const deleteExpense = async (eid) => {
+    if (!window.confirm("Delete this expense?")) return;
+    try { await api.delete(`/expenses/${eid}`); toast.success("Deleted"); fetchVehicle(); } catch { toast.error("Failed"); }
+  };
+
+  const createJob = async (e) => {
+    e.preventDefault();
+    if (!jobForm.work_description || !jobForm.mechanic_name || !jobForm.estimated_cost) { toast.error("Fill required fields"); return; }
+    setSaving(true);
+    try {
+      await api.post("/jobs", { vehicle_id: id, ...jobForm, estimated_cost: Number(jobForm.estimated_cost) });
+      toast.success("Job card created"); setShowJobModal(false);
+      setJobForm({ work_description: "", mechanic_name: "", estimated_cost: "", notes: "" });
+      fetchVehicle();
+    } catch { toast.error("Failed"); } finally { setSaving(false); }
+  };
+
+  const updateStatus = async (status) => {
+    try {
+      const upd = { status };
+      if (status === "sold") upd.sold_date = new Date().toISOString().slice(0, 10);
+      await api.put(`/vehicles/${id}`, upd);
+      toast.success(`Status updated to ${status}`);
+      fetchVehicle();
+    } catch { toast.error("Failed"); }
+  };
+
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.put(`/vehicles/${id}`, { ...editForm, purchase_price: Number(editForm.purchase_price), selling_price: editForm.selling_price ? Number(editForm.selling_price) : null, year: Number(editForm.year), engine_cc: Number(editForm.engine_cc), ownership_number: Number(editForm.ownership_number) });
+      toast.success("Vehicle updated"); setShowEditModal(false); fetchVehicle();
+    } catch { toast.error("Failed to update"); } finally { setSaving(false); }
+  };
+
+  const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const sel = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full" /></div>;
+  if (!vehicle) return null;
+
+  const ag = getAgingStyle(vehicle.aging?.category);
+  const st = getStatusStyle(vehicle.status);
+
+  return (
+    <div className="space-y-5 animate-fade-in">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate("/inventory")} className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"><ArrowLeft size={18} /></button>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">{vehicle.brand} {vehicle.model}</h1>
+            <p className="text-sm text-slate-500">{vehicle.year} · {vehicle.engine_cc}cc · {vehicle.fuel_type}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${ag.bg} ${ag.text}`}>{vehicle.aging?.days}d · {ag.label}</span>
+          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${st.bg} ${st.text}`}>{st.label}</span>
+          <button onClick={() => setShowEditModal(true)} className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors" data-testid="edit-vehicle-btn"><Edit size={14} /> Edit</button>
+        </div>
+      </div>
+
+      {/* Financial Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[
+          { label: "Purchase Price", value: formatNPR(vehicle.purchase_price) },
+          { label: "Total Expenses", value: formatNPR(vehicle.total_expenses) },
+          { label: "Total Investment", value: formatNPR(vehicle.total_investment), bold: true },
+          { label: vehicle.status === "sold" ? "Realized Profit" : "Expected Profit", value: vehicle.expected_profit !== null ? formatNPR(vehicle.expected_profit) : "N/A", highlight: vehicle.profit_margin !== null },
+        ].map(({ label, value, bold, highlight }) => (
+          <div key={label} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <div className="text-xs text-slate-500 mb-1">{label}</div>
+            <div className={`text-lg font-bold ${bold ? "text-slate-900" : highlight && vehicle.low_margin ? "text-red-600" : highlight ? "text-green-600" : "text-slate-900"}`} style={{ fontFamily: "Manrope" }}>{value}</div>
+            {label.includes("Profit") && vehicle.profit_margin !== null && (
+              <div className={`text-xs mt-0.5 ${vehicle.low_margin ? "text-red-500" : "text-green-600"}`}>
+                {vehicle.profit_margin}% margin {vehicle.low_margin ? "⚠ Low!" : ""}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Document Status */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+        <h2 className="text-sm font-bold text-slate-900 mb-3" style={{ fontFamily: "Manrope" }}>Document Status</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <DocCard label="Bluebook" status={vehicle.bluebook_status} />
+          <DocCard label="Insurance" status={vehicle.insurance_status} />
+          <DocCard label="Tax Clearance" status={vehicle.tax_clearance_status} />
+          <DocCard label="Transfer" status={vehicle.transfer_status} />
+        </div>
+      </div>
+
+      {/* Quick Status Update */}
+      {vehicle.status === "available" && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3 flex-wrap">
+          <span className="text-sm font-medium text-slate-700">Update Status:</span>
+          <button onClick={() => updateStatus("reserved")} className="px-3 py-1.5 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded-lg hover:bg-yellow-200 transition-colors">Mark Reserved</button>
+          <button onClick={() => updateStatus("sold")} className="px-3 py-1.5 bg-green-100 text-green-800 text-xs font-semibold rounded-lg hover:bg-green-200 transition-colors" data-testid="mark-sold-btn">Mark Sold</button>
+        </div>
+      )}
+      {vehicle.status === "reserved" && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3 flex-wrap">
+          <span className="text-sm font-medium text-slate-700">Update Status:</span>
+          <button onClick={() => updateStatus("available")} className="px-3 py-1.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded-lg hover:bg-blue-200 transition-colors">Mark Available</button>
+          <button onClick={() => updateStatus("sold")} className="px-3 py-1.5 bg-green-100 text-green-800 text-xs font-semibold rounded-lg hover:bg-green-200 transition-colors">Mark Sold</button>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="flex border-b border-slate-100">
+          {["overview", "expenses", "jobcards"].map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)} data-testid={`tab-${tab}`}
+              className={`px-5 py-3.5 text-sm font-medium capitalize transition-colors ${activeTab === tab ? "border-b-2 border-blue-600 text-blue-600" : "text-slate-500 hover:text-slate-700"}`}>
+              {tab === "jobcards" ? "Job Cards" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === "expenses" && vehicle.expenses?.length > 0 && <span className="ml-1.5 bg-slate-100 text-slate-600 text-xs px-1.5 py-0.5 rounded-full">{vehicle.expenses.length}</span>}
+              {tab === "jobcards" && vehicle.job_cards?.length > 0 && <span className="ml-1.5 bg-slate-100 text-slate-600 text-xs px-1.5 py-0.5 rounded-full">{vehicle.job_cards.length}</span>}
+            </button>
+          ))}
+        </div>
+
+        <div className="p-5">
+          {/* Overview Tab */}
+          {activeTab === "overview" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+              {[
+                ["Registration", vehicle.registration_number || "Not entered"],
+                ["Color", vehicle.color || "Not specified"],
+                ["Condition", vehicle.condition],
+                ["Purchase Source", vehicle.purchase_source],
+                ["Purchased From", vehicle.purchase_from || "—"],
+                ["Ownership", `${vehicle.ownership_number}${["st","nd","rd"][vehicle.ownership_number-1]||"th"} Owner`],
+                ["Purchase Date", vehicle.purchase_date?.slice(0, 10)],
+                ["Sold Date", vehicle.sold_date?.slice(0, 10) || "—"],
+              ].map(([k, v]) => (
+                <div key={k} className="flex justify-between py-2 border-b border-slate-50">
+                  <span className="text-sm text-slate-500">{k}</span>
+                  <span className="text-sm font-medium text-slate-900 text-right">{v}</span>
+                </div>
+              ))}
+              {vehicle.notes && (
+                <div className="col-span-2 mt-2">
+                  <div className="text-xs text-slate-500 mb-1">Notes</div>
+                  <div className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3">{vehicle.notes}</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Expenses Tab */}
+          {activeTab === "expenses" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500">Total: <strong className="text-slate-900">{formatNPR(vehicle.total_expenses)}</strong></span>
+                <button onClick={() => setShowExpenseModal(true)} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all active:scale-95" data-testid="add-expense-btn">
+                  <Plus size={14} /> Add Expense
+                </button>
+              </div>
+              {vehicle.expenses?.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 text-sm">No expenses recorded yet</div>
+              ) : (
+                <div className="divide-y divide-slate-50">
+                  {vehicle.expenses?.map(exp => {
+                    const catLabel = EXPENSE_CATEGORIES.find(c => c.value === exp.category)?.label || exp.category;
+                    return (
+                      <div key={exp.id} data-testid="expense-row" className="flex items-center justify-between py-3">
+                        <div>
+                          <div className="text-sm font-medium text-slate-900">{catLabel}</div>
+                          <div className="text-xs text-slate-500">{exp.description || "—"} · {exp.date?.slice(0,10)}</div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-semibold text-slate-900">{formatNPR(exp.amount)}</span>
+                          <button onClick={() => deleteExpense(exp.id)} className="text-red-400 hover:text-red-600 transition-colors"><Trash2 size={14} /></button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Job Cards Tab */}
+          {activeTab === "jobcards" && (
+            <div className="space-y-3">
+              <div className="flex justify-end">
+                <button onClick={() => setShowJobModal(true)} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all active:scale-95" data-testid="create-job-btn">
+                  <Plus size={14} /> Create Job Card
+                </button>
+              </div>
+              {vehicle.job_cards?.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 text-sm">No job cards yet</div>
+              ) : (
+                <div className="space-y-3">
+                  {vehicle.job_cards?.map(job => {
+                    const js = getJobStyle(job.status);
+                    return (
+                      <div key={job.id} data-testid="job-card-row" className="border border-slate-100 rounded-xl p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <div className="text-xs font-mono text-slate-500">{job.job_number}</div>
+                            <div className="font-semibold text-slate-900 text-sm mt-0.5">{job.work_description}</div>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${js.bg} ${js.text}`}>{js.label}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 text-xs text-slate-500">
+                          <span>Mechanic: <strong className="text-slate-700">{job.mechanic_name}</strong></span>
+                          <span>Est: <strong className="text-slate-700">{formatNPR(job.estimated_cost)}</strong></span>
+                          <span>Actual: <strong className="text-slate-700">{job.actual_cost ? formatNPR(job.actual_cost) : "—"}</strong></span>
+                        </div>
+                        {job.actual_cost > job.estimated_cost && (
+                          <div className="mt-2 text-xs text-red-600 font-medium flex items-center gap-1"><AlertCircle size={12} /> Budget exceeded by {formatNPR(job.actual_cost - job.estimated_cost)}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Add Expense Modal */}
+      {showExpenseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900">Add Expense</h2>
+              <button onClick={() => setShowExpenseModal(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
+            </div>
+            <form onSubmit={addExpense} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Category <span className="text-red-500">*</span></label>
+                <select value={expForm.category} onChange={e => setExpForm({...expForm, category: e.target.value})} className={sel}>{EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Amount (NPR) <span className="text-red-500">*</span></label>
+                <input type="number" value={expForm.amount} onChange={e => setExpForm({...expForm, amount: e.target.value})} placeholder="e.g. 5000" className={inp} data-testid="expense-amount-input" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Description</label>
+                <input value={expForm.description} onChange={e => setExpForm({...expForm, description: e.target.value})} placeholder="Details..." className={inp} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Date</label>
+                <input type="date" value={expForm.date} onChange={e => setExpForm({...expForm, date: e.target.value})} className={inp} />
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setShowExpenseModal(false)} className="flex-1 h-10 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
+                <button type="submit" disabled={saving} className="flex-1 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60" data-testid="save-expense-btn">
+                  {saving ? "Saving..." : "Add Expense"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Job Modal */}
+      {showJobModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900">Create Job Card</h2>
+              <button onClick={() => setShowJobModal(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
+            </div>
+            <form onSubmit={createJob} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Work Description <span className="text-red-500">*</span></label>
+                <textarea value={jobForm.work_description} onChange={e => setJobForm({...jobForm, work_description: e.target.value})} placeholder="Describe the work to be done..." rows={3} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" data-testid="job-description-input" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Mechanic Name <span className="text-red-500">*</span></label>
+                {mechanics.length > 0 ? (
+                  <select value={jobForm.mechanic_name} onChange={e => setJobForm({...jobForm, mechanic_name: e.target.value})} className={sel}>
+                    <option value="">Select Mechanic</option>
+                    {mechanics.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                    <option value="other">Other</option>
+                  </select>
+                ) : (
+                  <input value={jobForm.mechanic_name} onChange={e => setJobForm({...jobForm, mechanic_name: e.target.value})} placeholder="Mechanic name" className={inp} />
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Estimated Cost (NPR) <span className="text-red-500">*</span></label>
+                <input type="number" value={jobForm.estimated_cost} onChange={e => setJobForm({...jobForm, estimated_cost: e.target.value})} placeholder="e.g. 3000" className={inp} data-testid="job-cost-input" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+                <input value={jobForm.notes} onChange={e => setJobForm({...jobForm, notes: e.target.value})} placeholder="Additional notes..." className={inp} />
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setShowJobModal(false)} className="flex-1 h-10 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
+                <button type="submit" disabled={saving} className="flex-1 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60" data-testid="save-job-btn">
+                  {saving ? "Saving..." : "Create Job Card"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal (simplified) */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900">Edit Vehicle</h2>
+              <button onClick={() => setShowEditModal(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
+            </div>
+            <form onSubmit={saveEdit} className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                {[["Brand","brand","text"],["Model","model","text"],["Year","year","number"],["Engine CC","engine_cc","number"],["Purchase Price","purchase_price","number"],["Selling Price","selling_price","number"]].map(([label, key, type]) => (
+                  <div key={key}>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+                    <input type={type} value={editForm[key] || ""} onChange={e => setEditForm({...editForm, [key]: e.target.value})} className={inp} />
+                  </div>
+                ))}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
+                  <select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className={sel}>
+                    <option value="available">Available</option>
+                    <option value="reserved">Reserved</option>
+                    <option value="sold">Sold</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Condition</label>
+                  <select value={editForm.condition} onChange={e => setEditForm({...editForm, condition: e.target.value})} className={sel}>{CONDITIONS.map(c => <option key={c}>{c}</option>)}</select>
+                </div>
+              </div>
+              <div className="border-t border-slate-100 pt-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Documents</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {[["bluebook_status","Bluebook"],["insurance_status","Insurance"],["tax_clearance_status","Tax Clearance"],["transfer_status","Transfer"]].map(([key, label]) => (
+                    <div key={key}>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+                      <select value={editForm[key] || "pending"} onChange={e => setEditForm({...editForm, [key]: e.target.value})} className={sel}>
+                        <option value="pending">Pending</option><option value="ok">OK</option><option value="missing">Missing</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setShowEditModal(false)} className="flex-1 h-10 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
+                <button type="submit" disabled={saving} className="flex-1 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60">
+                  {saving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
