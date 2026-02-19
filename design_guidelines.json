@@ -1,0 +1,153 @@
+{
+  "brand_identity": {
+    "name": "Hamro G n G Auto",
+    "persona": "Professional, Trustworthy, Efficient, Localized",
+    "theme": "light",
+    "emotional_tone": "Clarity, Control, Growth"
+  },
+  "typography": {
+    "headings": {
+      "family": "Manrope, sans-serif",
+      "weights": ["600", "700", "800"],
+      "usage": "Page titles, Card headers, KPI values"
+    },
+    "body": {
+      "family": "Public Sans, sans-serif",
+      "weights": ["400", "500", "600"],
+      "usage": "Table data, Form labels, Descriptions"
+    },
+    "mono": {
+      "family": "JetBrains Mono, monospace",
+      "weights": ["400"],
+      "usage": "VIN numbers, License plates, SKUs"
+    }
+  },
+  "colors": {
+    "primary": {
+      "default": "#2563EB",
+      "hover": "#1D4ED8",
+      "foreground": "#FFFFFF",
+      "description": "Professional Blue - Trust and Stability"
+    },
+    "secondary": {
+      "default": "#F1F5F9",
+      "foreground": "#0F172A",
+      "description": "Slate 100 - Subtle backgrounds"
+    },
+    "background": {
+      "default": "#FFFFFF",
+      "subtle": "#F8FAFC"
+    },
+    "text": {
+      "primary": "#0F172A",
+      "secondary": "#64748B",
+      "muted": "#94A3B8"
+    },
+    "status": {
+      "fresh": {
+        "bg": "#DCFCE7",
+        "text": "#166534",
+        "description": "0-30 Days (Green)"
+      },
+      "normal": {
+        "bg": "#FEF9C3",
+        "text": "#854D0E",
+        "description": "31-45 Days (Yellow)"
+      },
+      "slow": {
+        "bg": "#FFEDD5",
+        "text": "#9A3412",
+        "description": "46-60 Days (Orange)"
+      },
+      "dead": {
+        "bg": "#FEE2E2",
+        "text": "#991B1B",
+        "description": "60+ Days (Red)"
+      }
+    },
+    "festival_mode": {
+      "primary": "#DC2626",
+      "accent": "#F59E0B",
+      "description": "Red/Gold for Dashain/Tihar"
+    }
+  },
+  "layout_strategy": {
+    "type": "Sidebar Navigation",
+    "structure": {
+      "sidebar": "Fixed width (250px), collapsible on mobile. Dark Slate (#0F172A) background for contrast.",
+      "header": "Sticky top bar, white background, shadow-sm. Contains Search, Notifications, Profile.",
+      "main": "bg-slate-50/30, p-6 or p-8 padding."
+    },
+    "grid_system": {
+      "dashboard": "grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6",
+      "detail_page": "grid-cols-1 lg:grid-cols-3 gap-8 (2 cols for main info, 1 col for actions/status)"
+    },
+    "spacing": "Generous spacing. Use p-6 for cards, gap-6 for grids. Avoid cramped data."
+  },
+  "component_guidelines": {
+    "cards": {
+      "style": "bg-white border border-slate-200 shadow-sm rounded-xl hover:shadow-md transition-shadow duration-200",
+      "usage": "KPIs, Vehicle Details, Job Summaries"
+    },
+    "tables": {
+      "style": "Clean rows, border-b border-slate-100. Header text-xs uppercase tracking-wider text-slate-500 font-semibold.",
+      "features": "Pagination, Search, Filter (Stock Status), Row Actions (Edit/Delete)"
+    },
+    "buttons": {
+      "primary": "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm rounded-lg px-4 py-2 font-medium transition-all active:scale-95",
+      "secondary": "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg px-4 py-2 font-medium",
+      "destructive": "bg-red-600 text-white hover:bg-red-700 rounded-lg px-4 py-2"
+    },
+    "badges": {
+      "style": "rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide",
+      "usage": "Stock Aging, Job Status, Payment Status"
+    },
+    "inputs": {
+      "style": "border-slate-200 focus:border-primary focus:ring-primary rounded-lg h-10 px-3 text-sm"
+    }
+  },
+  "visual_assets": {
+    "images": [
+      {
+        "category": "auth_background",
+        "url": "https://images.pexels.com/photos/11890957/pexels-photo-11890957.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Mechanic repairing motorcycle in garage. Use with dark overlay for Login page."
+      },
+      {
+        "category": "dashboard_hero",
+        "url": "https://images.unsplash.com/photo-1767606949966-3ed6bbcfd7f1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHw0fHxtb3RvcmN5Y2xlJTIwc2hvd3Jvb20lMjBpbnRlcmlvciUyMG1vZGVybnxlbnwwfHx8fDE3NzE0OTY5NzN8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Modern showroom bike. Use for 'Add Vehicle' or empty states."
+      },
+      {
+        "category": "partner_dashboard",
+        "url": "https://images.unsplash.com/photo-1758518730384-be3d205838e8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA6OTV8MHwxfHNlYXJjaHwxfHxidXNpbmVzcyUyMGhhbmRzaGFrZSUyMHByb2Zlc3Npb25hbHxlbnwwfHx8fDE3NzE0OTY5NzV8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Business handshake. Use for Partner/Financial section headers."
+      }
+    ],
+    "icons": "Lucide React (already installed). Use distinct icons for Sidebar: LayoutDashboard (Dashboard), Bike (Inventory), Wrench (Job Cards), Users (Customers), Briefcase (Partners), FileText (Reports), Settings."
+  },
+  "special_features": {
+    "stock_aging_logic": {
+      "fresh": "0-30 Days",
+      "normal": "31-45 Days",
+      "slow": "46-60 Days",
+      "dead": "60+ Days"
+    },
+    "festival_mode": "Toggle in Settings. Adds 'Happy Dashain/Tihar' banner and changes primary accent color to Red/Gold.",
+    "currency": "NPR (Nepali Rupee). Display as 'Rs. 1,50,000' or 'NPR 1.5L'."
+  },
+  "accessibility": {
+    "contrast": "Ensure text is slate-900 on white backgrounds. Status badges must have dark enough text on light bg.",
+    "interactive": "Focus rings on all inputs/buttons. data-testid attributes mandatory."
+  },
+  "universal_guidelines": [
+    "Do not use gradients for backgrounds. Keep it flat and clean.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Every interaction needs micro-animations - hover states, transitions.",
+    "Use 'sonner' for toasts.",
+    "All interactive elements MUST include `data-testid` attribute.",
+    "Components MUST use named exports.",
+    "Pages MUST use default exports."
+  ],
+  "instructions_to_main_agent": "Start by setting up the Sidebar Layout. Then build the Dashboard with KPI cards using the color coding for stock aging. Prioritize the Vehicle List view as it's the core operation. Ensure the Job Card flow is intuitive (Status: Pending -> In Progress -> Completed)."
+}
