@@ -94,7 +94,7 @@ export default function Inventory() {
           <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
           <p className="text-sm text-slate-500">{filtered.length} vehicles found</p>
         </div>
-        <button onClick={() => setShowModal(true)} data-testid="add-vehicle-button" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-all active:scale-95 shadow-sm">
+        <button onClick={() => { setForm(EMPTY); setShowModal(true); }} data-testid="add-vehicle-button" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-all active:scale-95 shadow-sm">
           <Plus size={16} /> Add Vehicle
         </button>
       </div>
@@ -187,7 +187,7 @@ export default function Inventory() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900" style={{ fontFamily: "Manrope, sans-serif" }}>Add New Vehicle</h2>
-              <button onClick={() => setShowModal(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
+              <button onClick={() => { setShowModal(false); setForm(EMPTY); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
             </div>
             <form onSubmit={handleSave} className="p-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -198,10 +198,10 @@ export default function Inventory() {
                   <input data-testid="model-input" value={form.model} onChange={e => setForm({...form, model: e.target.value})} placeholder="e.g. CB Shine, FZ-S" className={inp} />
                 </Field>
                 <Field label="Year" required>
-                  <input type="number" value={form.year} onChange={e => setForm({...form, year: e.target.value})} className={inp} min="1990" max="2030" />
+                  <input type="text" inputMode="numeric" pattern="[0-9]*" value={form.year} onChange={e => setForm({...form, year: e.target.value})} placeholder="e.g. 2020" className={inp} />
                 </Field>
                 <Field label="Engine CC">
-                  <input type="number" value={form.engine_cc} onChange={e => setForm({...form, engine_cc: e.target.value})} className={inp} />
+                  <input type="text" inputMode="numeric" pattern="[0-9]*" value={form.engine_cc} onChange={e => setForm({...form, engine_cc: e.target.value})} placeholder="e.g. 125" className={inp} />
                 </Field>
                 <Field label="Fuel Type">
                   <select value={form.fuel_type} onChange={e => setForm({...form, fuel_type: e.target.value})} className={sel}>{FUEL_TYPES.map(f => <option key={f}>{f}</option>)}</select>
@@ -210,10 +210,10 @@ export default function Inventory() {
                   <select value={form.ownership_number} onChange={e => setForm({...form, ownership_number: Number(e.target.value)})} className={sel}>{[1,2,3,4,5].map(n => <option key={n} value={n}>{n}{["st","nd","rd"][n-1]||"th"} Owner</option>)}</select>
                 </Field>
                 <Field label="Purchase Price (NPR)" required>
-                  <input data-testid="purchase-price-input" type="number" value={form.purchase_price} onChange={e => setForm({...form, purchase_price: e.target.value})} placeholder="e.g. 150000" className={inp} />
+                  <input data-testid="purchase-price-input" type="text" inputMode="numeric" pattern="[0-9]*" value={form.purchase_price} onChange={e => setForm({...form, purchase_price: e.target.value})} placeholder="e.g. 150000" className={inp} />
                 </Field>
                 <Field label="Selling Price (NPR)">
-                  <input type="number" value={form.selling_price} onChange={e => setForm({...form, selling_price: e.target.value})} placeholder="e.g. 185000" className={inp} />
+                  <input type="text" inputMode="numeric" pattern="[0-9]*" value={form.selling_price} onChange={e => setForm({...form, selling_price: e.target.value})} placeholder="e.g. 185000" className={inp} />
                 </Field>
                 <Field label="Purchase Date" required>
                   <input data-testid="purchase-date-input" type="date" value={form.purchase_date} onChange={e => setForm({...form, purchase_date: e.target.value})} className={inp} />
@@ -257,7 +257,7 @@ export default function Inventory() {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 h-10 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">Cancel</button>
+                <button type="button" onClick={() => { setShowModal(false); setForm(EMPTY); }} className="flex-1 h-10 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">Cancel</button>
                 <button data-testid="save-vehicle-button" type="submit" disabled={saving} className="flex-1 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-all active:scale-95 disabled:opacity-60">
                   {saving ? "Saving..." : "Add Vehicle"}
                 </button>
