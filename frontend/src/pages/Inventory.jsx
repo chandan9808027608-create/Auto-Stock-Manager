@@ -4,6 +4,8 @@ import { Plus, Search, Eye, Trash2, Filter } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getAgingStyle, getStatusStyle, BRANDS, SOURCES, CONDITIONS, FUEL_TYPES } from "../utils/helpers";
+import BSDatePicker from "../components/BSDatePicker";
+import { formatBSDate } from "../utils/nepali-date";
 
 const STATUSES = ["all", "available", "sold", "reserved"];
 
@@ -11,8 +13,8 @@ const STATUSES = ["all", "available", "sold", "reserved"];
 const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
 const sel = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
 
-const Field = ({ label, required, children }) => (
-  <div>
+const Field = ({ label, required, children, full }) => (
+  <div className={full ? "col-span-2" : ""}>
     <label className="block text-xs font-medium text-slate-600 mb-1">
       {label}{required && <span className="text-red-500 ml-0.5">*</span>}
     </label>
@@ -186,7 +188,7 @@ export default function Inventory() {
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700 whitespace-nowrap">{v.year} · {v.engine_cc}cc</td>
                       <td className="px-4 py-3 text-sm font-mono text-slate-600">{v.registration_number || "—"}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">{v.purchase_date?.slice(0, 10)}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">{formatBSDate(v.purchase_date)}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${ag.bg} ${ag.text}`}>
                           {v.aging?.days}d · {ag.label}
@@ -309,13 +311,12 @@ export default function Inventory() {
                     className={inp}
                   />
                 </Field>
-                <Field label="Purchase Date" required>
-                  <input
+                <Field label="Purchase Date" required full>
+                  <BSDatePicker
                     data-testid="purchase-date-input"
-                    type="date"
                     value={form.purchase_date}
-                    onChange={e => setForm({...form, purchase_date: e.target.value})}
-                    className={inp}
+                    onChange={val => setForm({...form, purchase_date: val})}
+                    required
                   />
                 </Field>
                 <Field label="Purchase Source" required>

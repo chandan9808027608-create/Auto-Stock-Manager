@@ -4,6 +4,7 @@ import { ArrowLeft, Plus, Trash2, Edit, CheckCircle, AlertCircle, Clock, FileTex
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, getJobStyle, EXPENSE_CATEGORIES, SOURCES, CONDITIONS, FUEL_TYPES, BRANDS } from "../utils/helpers";
+import { formatBSDate } from "../utils/nepali-date";
 
 const DocCard = ({ label, status }) => {
   const s = getDocStyle(status);
@@ -195,8 +196,8 @@ export default function VehicleDetail() {
                 ["Purchase Source", vehicle.purchase_source],
                 ["Purchased From", vehicle.purchase_from || "—"],
                 ["Ownership", `${vehicle.ownership_number}${["st","nd","rd"][vehicle.ownership_number-1]||"th"} Owner`],
-                ["Purchase Date", vehicle.purchase_date?.slice(0, 10)],
-                ["Sold Date", vehicle.sold_date?.slice(0, 10) || "—"],
+                ["Purchase Date", formatBSDate(vehicle.purchase_date)],
+                ["Sold Date", vehicle.sold_date ? formatBSDate(vehicle.sold_date) : "—"],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between py-2 border-b border-slate-50">
                   <span className="text-sm text-slate-500">{k}</span>

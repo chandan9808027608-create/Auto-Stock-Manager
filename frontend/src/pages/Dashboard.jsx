@@ -1,9 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { AlertTriangle, TrendingUp, Package, Users, Wrench, DollarSign, Clock, ShoppingCart } from "lucide-react";
+import { AlertTriangle, TrendingUp, Package, Users, Wrench, DollarSign, Clock, ShoppingCart, CalendarDays, TrendingDown, Banknote } from "lucide-react";
 import api from "../utils/api";
 import { formatNPR } from "../utils/helpers";
+import {
+  getCurrentBSDate, getCurrentBSMonthRange, getCurrentBSYearRange,
+  getTodayAD, BS_MONTHS,
+} from "../utils/nepali-date";
+
+// ── Sub-components defined OUTSIDE to prevent remount ──────────────────
+const AGING_COLORS = { fresh: "#22c55e", normal: "#eab308", slow: "#f97316", dead: "#ef4444" };
 
 const KPICard = ({ title, value, subtitle, icon: Icon, color, testid }) => (
   <div data-testid={testid} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-shadow duration-200 animate-fade-in">
@@ -31,8 +38,124 @@ const AlertCard = ({ title, count, description, color, onClick }) => (
   </div>
 );
 
-const AGING_COLORS = { fresh: "#22c55e", normal: "#eab308", slow: "#f97316", dead: "#ef4444" };
+const AccountingKPI = ({ label, value, color, icon: Icon, sub }) => (
+  <div className={`rounded-xl p-4 ${color} flex items-center gap-4`}>
+    <div className="w-10 h-10 rounded-lg bg-white/30 flex items-center justify-center">
+      <Icon size={18} className="text-white" />
+    </div>
+    <div>
+      <p className="text-xs font-semibold opacity-80 uppercase tracking-wider">{label}</p>
+      <p className="text-xl font-bold text-white" style={{ fontFamily: "Manrope, sans-serif" }}>{value}</p>
+      {sub && <p className="text-xs opacity-70 mt-0.5">{sub}</p>}
+    </div>
+  </div>
+);
 
+// ── Accounting Summary Block ───────────────────────────────────────────
+const PERIODS = [
+  { key: "daily", label: "Today" },
+  { key: "monthly", label: "This Month (BS)" },
+  { key: "yearly", label: "This Year (BS)" },
+];
+
+function AccountingSummary() {
+  const [activePeriod, setActivePeriod] = useState("monthly");
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const fetchSummary = useCallback(async (period) => {
+    setLoading(true); setData(null);
+    try {
+      let start, end, label;
+      const today = getTodayAD();
+      if (period === "daily") {
+        start = today; end = today;
+        const bs = getCurrentBSDate();
+        label = bs ? `${BS_MONTHS[bs.month - 1]} ${bs.day}, ${bs.year} BS` : today;
+      } else if (period === "monthly") {
+        const range = getCurrentBSMonthRange();
+        start = range.start; end = range.end;
+        label = `${BS_MONTHS[range.bsMonth - 1]} ${range.bsYear} BS`;
+      } else {
+        const range = getCurrentBSYearRange();
+        start = range.start; end = range.end;
+        label = `${range.bsYear} BS`;
+      }
+      const res = await api.get(`/reports/accounting-summary?start_date=${start}&end_date=${end}`);
+      setData({ ...res.data, periodLabel: label });
+    } catch (e) {
+      console.error(e);
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchSummary(activePeriod); }, [activePeriod, fetchSummary]);
+
+  const isProfitPositive = data && data.net_profit >= 0;
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5" data-testid="accounting-summary">
+      {/* Header + Tabs */}
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div>
+          <h2 className="text-base font-bold text-slate-900" style={{ fontFamily: "Manrope, sans-serif" }}>
+            Accounting Summary
+          </h2>
+          {data && <p className="text-xs text-slate-500 mt-0.5">{data.periodLabel}</p>}
+        </div>
+        <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
+          {PERIODS.map(p => (
+            <button
+              key={p.key}
+              data-testid={`period-tab-${p.key}`}
+              onClick={() => setActivePeriod(p.key)}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                activePeriod === p.key
+                  ? "bg-white shadow text-blue-700"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-28">
+          <div className="animate-spin w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full" />
+        </div>
+      ) : data ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <AccountingKPI
+            label="Total Cost"
+            value={formatNPR(data.total_cost)}
+            sub={`${data.purchase_count} vehicle${data.purchase_count !== 1 ? "s" : ""} purchased`}
+            color="bg-blue-500"
+            icon={ShoppingCart}
+          />
+          <AccountingKPI
+            label="Total Sales"
+            value={formatNPR(data.total_sales)}
+            sub={`${data.sold_count} vehicle${data.sold_count !== 1 ? "s" : ""} sold`}
+            color="bg-green-500"
+            icon={Banknote}
+          />
+          <AccountingKPI
+            label="Net Profit"
+            value={formatNPR(data.net_profit)}
+            sub={isProfitPositive ? "Profitable period" : "Loss period"}
+            color={isProfitPositive ? "bg-emerald-600" : "bg-red-500"}
+            icon={isProfitPositive ? TrendingUp : TrendingDown}
+          />
+        </div>
+      ) : (
+        <p className="text-sm text-slate-400 text-center py-6">Could not load data</p>
+      )}
+    </div>
+  );
+}
+
+// ── Main Dashboard ─────────────────────────────────────────────────────
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -60,13 +183,27 @@ export default function Dashboard() {
     { name: "Dead (60+d)", count: stats.dead_stock_count || 0, color: AGING_COLORS.dead },
   ];
 
+  const bs = getCurrentBSDate();
+  const bsDateStr = bs ? `${bs.day} ${BS_MONTHS[bs.month - 1]} ${bs.year} BS` : "";
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Overview of Hamro G n G Auto operations</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Overview of Hamro G n G Auto operations</p>
+        </div>
+        {bsDateStr && (
+          <div className="hidden sm:flex items-center gap-2 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded-lg" data-testid="bs-today-display">
+            <CalendarDays size={14} className="text-blue-600" />
+            <span className="text-xs font-semibold text-blue-700">{bsDateStr}</span>
+          </div>
+        )}
       </div>
+
+      {/* Accounting Summary (BS-based) */}
+      <AccountingSummary />
 
       {/* KPI Row 1 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -105,35 +242,11 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5" data-testid="alerts-panel">
           <h2 className="text-base font-bold text-slate-900 mb-4" style={{ fontFamily: "Manrope, sans-serif" }}>Stock Alerts</h2>
           <div className="space-y-3">
-            <AlertCard
-              title="Dead Stock"
-              count={stats.dead_stock_count}
-              description="60+ days. Immediate action needed."
-              color="bg-red-100 text-red-800"
-              onClick={() => navigate("/inventory?aging=dead")}
-            />
-            <AlertCard
-              title="Slow Moving"
-              count={stats.slow_moving_count}
-              description="46–60 days. Consider price reduction."
-              color="bg-orange-100 text-orange-800"
-              onClick={() => navigate("/inventory?aging=slow")}
-            />
-            <AlertCard
-              title="Pending Jobs"
-              count={stats.pending_jobs}
-              description="Job cards awaiting attention."
-              color="bg-yellow-100 text-yellow-800"
-              onClick={() => navigate("/jobs?status=pending")}
-            />
+            <AlertCard title="Dead Stock" count={stats.dead_stock_count} description="60+ days. Immediate action needed." color="bg-red-100 text-red-800" onClick={() => navigate("/inventory?aging=dead")} />
+            <AlertCard title="Slow Moving" count={stats.slow_moving_count} description="46–60 days. Consider price reduction." color="bg-orange-100 text-orange-800" onClick={() => navigate("/inventory?aging=slow")} />
+            <AlertCard title="Pending Jobs" count={stats.pending_jobs} description="Job cards awaiting attention." color="bg-yellow-100 text-yellow-800" onClick={() => navigate("/jobs?status=pending")} />
             {stats.in_progress_jobs > 0 && (
-              <AlertCard
-                title="In Progress"
-                count={stats.in_progress_jobs}
-                description="Active repair/prep work."
-                color="bg-blue-100 text-blue-800"
-                onClick={() => navigate("/jobs?status=in_progress")}
-              />
+              <AlertCard title="In Progress" count={stats.in_progress_jobs} description="Active repair/prep work." color="bg-blue-100 text-blue-800" onClick={() => navigate("/jobs?status=in_progress")} />
             )}
           </div>
         </div>
@@ -145,11 +258,7 @@ export default function Dashboard() {
           <p className="font-semibold text-blue-900 text-sm">Need AI-powered business advice?</p>
           <p className="text-blue-700 text-xs mt-0.5">Get inventory, finance, and festival strategy recommendations</p>
         </div>
-        <button
-          onClick={() => navigate("/ai")}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors active:scale-95"
-          data-testid="go-to-ai-btn"
-        >
+        <button onClick={() => navigate("/ai")} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors active:scale-95" data-testid="go-to-ai-btn">
           Ask AI
         </button>
       </div>

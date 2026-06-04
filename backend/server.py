@@ -802,6 +802,41 @@ async def financial_report(cu: dict = Depends(get_current_user)):
                        "profit_share": round(total_profit * p["stake_percentage"] / 100, 2)} for p in partners]
     return {"monthly_breakdown": monthly, "total_profit": total_profit, "partner_shares": partner_shares}
 
+# ── ACCOUNTING SUMMARY ────────────────────────────────────────────────
+@api_router.get("/reports/accounting-summary")
+async def accounting_summary(start_date: str, end_date: str, cu: dict = Depends(get_current_user)):
+    """Returns cost/sales/profit for vehicles purchased/sold within [start_date, end_date]."""
+    # Vehicles purchased in period (total cost = purchase + expenses)
+    purchased = await db.vehicles.find(
+        {"purchase_date": {"$gte": start_date, "$lte": end_date}}, {"_id": 0}
+    ).to_list(5000)
+    total_cost, purchase_count = 0, len(purchased)
+    for v in purchased:
+        exps = await db.expenses.find({"vehicle_id": v["id"]}, {"_id": 0}).to_list(200)
+        total_cost += v.get("purchase_price", 0) + v.get("accessories_cost", 0) + sum(e["amount"] for e in exps)
+
+    # Vehicles sold in period
+    sold = await db.vehicles.find(
+        {"status": "sold", "sold_date": {"$gte": start_date, "$lte": end_date}}, {"_id": 0}
+    ).to_list(5000)
+    total_sales, total_investment_sold, sold_count = 0, 0, len(sold)
+    for v in sold:
+        exps = await db.expenses.find({"vehicle_id": v["id"]}, {"_id": 0}).to_list(200)
+        inv = v.get("purchase_price", 0) + v.get("accessories_cost", 0) + sum(e["amount"] for e in exps)
+        total_investment_sold += inv
+        total_sales += v.get("selling_price") or 0
+
+    net_profit = total_sales - total_investment_sold
+    return {
+        "period": {"start": start_date, "end": end_date},
+        "total_cost": total_cost,
+        "purchase_count": purchase_count,
+        "total_sales": total_sales,
+        "sold_count": sold_count,
+        "net_profit": net_profit,
+        "total_investment_sold": total_investment_sold,
+    }
+
 # ── AI SUGGESTIONS ────────────────────────────────────────────────────
 @api_router.post("/ai/suggestions")
 async def ai_suggestions(req: AIRequest, cu: dict = Depends(get_current_user)):
