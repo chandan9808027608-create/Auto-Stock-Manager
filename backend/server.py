@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -525,6 +526,15 @@ async def delete_vendor(vid: str, cu: dict = Depends(get_current_user)):
     if r.deleted_count == 0: raise HTTPException(404, "Not found")
     return {"message": "Deleted"}
 
+@api_router.get("/vendors/search")
+async def search_vendors(q: str = "", cu: dict = Depends(get_current_user)):
+    """Fast vendor name search for autocomplete."""
+    vendors = await db.vendors.find({}, {"_id": 0, "id": 1, "name": 1, "phone": 1}).to_list(200)
+    if q:
+        q_lower = q.lower()
+        vendors = [v for v in vendors if q_lower in v.get("name", "").lower()]
+    return vendors[:8]
+
 @api_router.get("/vendors/{vid}/payments")
 async def get_vendor_payments(vid: str, cu: dict = Depends(get_current_user)):
     payments = await db.vendor_payments.find({"vendor_id": vid}, {"_id": 0}).sort("payment_date", -1).to_list(500)
@@ -883,6 +893,121 @@ Format as numbered list with bold headings."""
         return {"suggestions": response, "context_type": req.context_type}
     except Exception as e:
         logger.error(f"AI error: {e}")
+        raise HTTPException(500, f"AI error: {str(e)}")
+
+# ── AI PRICING ENGINE ─────────────────────────────────────────────────
+@api_router.post("/ai/price-suggestion")
+async def ai_price_suggestion(req: dict, cu: dict = Depends(get_current_user)):
+    """Suggest optimal selling price for a vehicle based on its details."""
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(500, "AI not configured")
+    v = req.get("vehicle", {})
+    # Get market context from existing inventory
+    sold = await db.vehicles.find(
+        {"status": "sold", "brand": v.get("brand"), "model": v.get("model")}, {"_id": 0}
+    ).to_list(20)
+    sold_prices = [{"year": s.get("year"), "km": s.get("kilometer_run"), "price": s.get("selling_price")} for s in sold if s.get("selling_price")]
+
+    system_msg = """You are an expert vehicle pricing analyst for Nepal's secondhand motorcycle market.
+Provide a SPECIFIC recommended selling price range in NPR, based on the vehicle details and market data.
+Be concise: give a price range, 3 key pricing factors, and confidence level. Use NPR."""
+
+    prompt = f"""Vehicle to price:
+{json.dumps(v, indent=2)}
+
+Recent sold prices for same brand/model:
+{json.dumps(sold_prices, indent=2) if sold_prices else "No history - use Nepal market knowledge"}
+
+Provide:
+1. **Recommended Price Range**: NPR X to NPR Y
+2. **Optimal Listing Price**: NPR Z
+3. **Key Factors** (3 bullet points)
+4. **Confidence**: High/Medium/Low"""
+
+    try:
+        chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=str(uuid.uuid4()),
+                       system_message=system_msg).with_model("gemini", "gemini-3-flash-preview")
+        response = await chat.send_message(UserMessage(text=prompt))
+        return {"suggestion": response, "vehicle": v, "sold_history_count": len(sold_prices)}
+    except Exception as e:
+        logger.error(f"AI pricing: {e}")
+        raise HTTPException(500, f"AI error: {str(e)}")
+
+# ── FESTIVAL INTELLIGENCE ─────────────────────────────────────────────
+@api_router.get("/ai/festival-intelligence")
+async def festival_intelligence(cu: dict = Depends(get_current_user)):
+    """Detect current/upcoming Nepali festivals and give business strategy."""
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(500, "AI not configured")
+    avail = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(100)
+    stock_summary = {}
+    for v in avail:
+        brand = v.get("brand", "Other")
+        stock_summary[brand] = stock_summary.get(brand, 0) + 1
+
+    today_str = datetime.now(timezone.utc).date().isoformat()
+
+    system_msg = """You are a Nepal business intelligence expert specializing in the Nepali calendar and festival-based marketing for the vehicle industry."""
+    prompt = f"""Today is {today_str} (AD). Current available inventory by brand: {json.dumps(stock_summary)}
+
+Tasks:
+1. **Current/Upcoming Festivals**: List the 2-3 most important upcoming Nepali festivals within the next 45 days (use BS calendar knowledge). Include the approximate BS and AD dates.
+2. **Festival Demand Forecast**: How will Dashain/Tihar/other upcoming festivals affect motorcycle/scooter demand? Quantify if possible.
+3. **Stock Strategy**: Which vehicles should be promoted, priced aggressively, or held for festival season?
+4. **Marketing Timing**: Best 2-week window to launch promotions for maximum impact.
+5. **Action Items**: 3 concrete steps to take THIS WEEK.
+
+Be specific to Nepal context and use NPR pricing references."""
+
+    try:
+        chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=str(uuid.uuid4()),
+                       system_message=system_msg).with_model("gemini", "gemini-3-flash-preview")
+        response = await chat.send_message(UserMessage(text=prompt))
+        return {"intelligence": response, "generated_at": today_str, "stock_snapshot": stock_summary}
+    except Exception as e:
+        logger.error(f"Festival AI: {e}")
+        raise HTTPException(500, f"AI error: {str(e)}")
+
+# ── AI CHATBOT ────────────────────────────────────────────────────────
+@api_router.post("/ai/chatbot")
+async def ai_chatbot(req: dict, cu: dict = Depends(get_current_user)):
+    """AI sales chatbot that answers queries about available vehicles."""
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(500, "AI not configured")
+    message = req.get("message", "").strip()
+    session_id = req.get("session_id", str(uuid.uuid4()))
+    if not message:
+        raise HTTPException(400, "Message is required")
+
+    # Load available stock for context
+    avail = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(50)
+    stock_text = "\n".join([
+        f"- {v.get('brand')} {v.get('model')} {v.get('year')} | {v.get('engine_cc')}cc | {v.get('fuel_type')} | "
+        f"{v.get('ownership_number', 1)}{'st' if v.get('ownership_number',1)==1 else 'nd' if v.get('ownership_number',1)==2 else 'rd' if v.get('ownership_number',1)==3 else 'th'} owner | "
+        f"Condition: {v.get('condition')} | Price: NPR {v.get('selling_price', 'Contact us')} | Reg#: {v.get('registration_number', 'N/A')}"
+        for v in avail
+    ]) or "No vehicles currently in stock."
+
+    system_msg = f"""You are a friendly and knowledgeable sales assistant at Hamro G&G Auto Enterprises in Kathmandu, Nepal.
+You help customers find the right motorcycle or scooter.
+CURRENT AVAILABLE STOCK:
+{stock_text}
+
+Always:
+- Be helpful and friendly
+- Answer in English
+- Mention specific vehicles from stock when relevant
+- Quote prices in NPR
+- Suggest customers call/visit for test rides
+- Keep responses concise (2-4 sentences max unless detailed info is needed)"""
+
+    try:
+        chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=session_id,
+                       system_message=system_msg).with_model("gemini", "gemini-3-flash-preview")
+        response = await chat.send_message(UserMessage(text=message))
+        return {"reply": response, "session_id": session_id}
+    except Exception as e:
+        logger.error(f"Chatbot AI: {e}")
         raise HTTPException(500, f"AI error: {str(e)}")
 
 # ── AUDIT LOGS ────────────────────────────────────────────────────────

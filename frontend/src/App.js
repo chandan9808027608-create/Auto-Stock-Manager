@@ -14,6 +14,10 @@ import Reports from "./pages/Reports";
 import Partners from "./pages/Partners";
 import AIAssistant from "./pages/AIAssistant";
 import Settings from "./pages/Settings";
+import Vendors from "./pages/Vendors";
+import Finance from "./pages/Finance";
+import Marketing from "./pages/Marketing";
+import EMI from "./pages/EMI";
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
@@ -38,6 +42,10 @@ function AppRoutes() {
         <Route path="team" element={<Team />} />
         <Route path="reports" element={<Reports />} />
         <Route path="partners" element={<Partners />} />
+        <Route path="vendors" element={<Vendors />} />
+        <Route path="finance" element={<Finance />} />
+        <Route path="marketing" element={<Marketing />} />
+        <Route path="emi" element={<EMI />} />
         <Route path="ai" element={<AIAssistant />} />
         <Route path="settings" element={<Settings />} />
       </Route>

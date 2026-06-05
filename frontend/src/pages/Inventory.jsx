@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getAgingStyle, getStatusStyle, BRANDS, SOURCES, CONDITIONS, FUEL_TYPES } from "../utils/helpers";
 import BSDatePicker from "../components/BSDatePicker";
+import VendorAutocomplete from "../components/VendorAutocomplete";
 import { formatBSDate } from "../utils/nepali-date";
 
 const STATUSES = ["all", "available", "sold", "reserved"];
@@ -25,7 +26,7 @@ const Field = ({ label, required, children, full }) => (
 const EMPTY = {
   brand: "", model: "", year: new Date().getFullYear(), engine_cc: 125, fuel_type: "Petrol",
   ownership_number: 1, purchase_price: "", purchase_date: "", purchase_source: "", purchase_from: "",
-  condition: "Good", color: "", registration_number: "", selling_price: "", notes: "", status: "available",
+  vendor_id: null, condition: "Good", color: "", registration_number: "", selling_price: "", notes: "", status: "available",
   bluebook_status: "pending", insurance_status: "pending", tax_clearance_status: "pending", transfer_status: "pending"
 };
 
@@ -326,11 +327,10 @@ export default function Inventory() {
                   </select>
                 </Field>
                 <Field label="Purchased From (Name)">
-                  <input
+                  <VendorAutocomplete
                     value={form.purchase_from}
-                    onChange={e => setForm({...form, purchase_from: e.target.value})}
-                    placeholder="Person/dealer name"
-                    className={inp}
+                    onChange={(name, vendorId) => setForm({...form, purchase_from: name, vendor_id: vendorId || form.vendor_id})}
+                    placeholder="Type vendor name to search..."
                   />
                 </Field>
                 <Field label="Condition">

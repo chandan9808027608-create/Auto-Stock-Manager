@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2, Edit, CheckCircle, AlertCircle, Clock, FileText } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Edit, CheckCircle, AlertCircle, Clock, FileText, QrCode } from "lucide-react";
 import { toast } from "sonner";
+import { QRCodeSVG } from "qrcode.react";
 import api from "../utils/api";
 import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, getJobStyle, EXPENSE_CATEGORIES, SOURCES, CONDITIONS, FUEL_TYPES, BRANDS } from "../utils/helpers";
 import { formatBSDate } from "../utils/nepali-date";
@@ -98,6 +99,17 @@ export default function VehicleDetail() {
     } catch { toast.error("Failed to update"); } finally { setSaving(false); }
   };
 
+  const [showQR, setShowQR] = useState(false);
+  const [qrData, setQrData] = useState(null);
+
+  const loadQR = async () => {
+    try {
+      const r = await api.get(`/vehicles/${id}/qr-data`);
+      setQrData(r.data);
+      setShowQR(true);
+    } catch { toast.error("Failed to load QR"); }
+  };
+
   const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
   const sel = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
 
@@ -122,6 +134,7 @@ export default function VehicleDetail() {
           <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${ag.bg} ${ag.text}`}>{vehicle.aging?.days}d · {ag.label}</span>
           <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${st.bg} ${st.text}`}>{st.label}</span>
           <button onClick={() => setShowEditModal(true)} className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors" data-testid="edit-vehicle-btn"><Edit size={14} /> Edit</button>
+          <button onClick={loadQR} className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors" data-testid="qr-btn"><QrCode size={14} /> QR Label</button>
         </div>
       </div>
 
@@ -416,6 +429,44 @@ export default function VehicleDetail() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* QR Code Modal */}
+      {showQR && qrData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900">Vehicle QR Label</h2>
+              <button onClick={() => setShowQR(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
+            </div>
+            <div className="p-6 flex flex-col items-center gap-4" id="qr-label-content">
+              <div className="text-center">
+                <div className="font-bold text-xl text-slate-900">{qrData.brand} {qrData.model}</div>
+                <div className="text-sm text-slate-500">{qrData.year} · {qrData.engine_cc}cc · {qrData.fuel_type}</div>
+              </div>
+              <div className="p-3 bg-white border-2 border-slate-900 rounded-xl">
+                <QRCodeSVG
+                  data-testid="vehicle-qr-code"
+                  value={JSON.stringify({ id: qrData.id, brand: qrData.brand, model: qrData.model, year: qrData.year, reg: qrData.registration_number, price: qrData.selling_price, contact: qrData.contact })}
+                  size={180}
+                  level="M"
+                />
+              </div>
+              <div className="text-center space-y-1">
+                {qrData.registration_number && <div className="text-sm font-mono font-bold text-slate-800">Reg: {qrData.registration_number}</div>}
+                {qrData.selling_price && <div className="text-sm font-bold text-green-700">Price: {formatNPR(qrData.selling_price)}</div>}
+                <div className="text-xs text-slate-400">Hamro G&G Auto Enterprises · Kathmandu</div>
+              </div>
+              <button
+                onClick={() => window.print()}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors"
+                data-testid="print-qr-btn"
+              >
+                Print Label
+              </button>
+            </div>
           </div>
         </div>
       )}
