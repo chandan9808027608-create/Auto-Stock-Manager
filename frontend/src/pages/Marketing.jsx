@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Megaphone, Copy, Check, Loader2, Facebook, Instagram } from "lucide-react";
+import { Megaphone, Copy, Check, Loader2, Globe, Download, RefreshCw, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR } from "../utils/helpers";
@@ -19,6 +19,9 @@ export default function Marketing() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [syncData, setSyncData] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [pushed, setPushed] = useState(false);
 
   useEffect(() => {
     api.get("/vehicles?status=available").then(r => setVehicles(r.data)).catch(console.error);
@@ -28,6 +31,35 @@ export default function Marketing() {
     setSelectedPlatforms(prev =>
       prev.includes(pid) ? prev.filter(p => p !== pid) : [...prev, pid]
     );
+  };
+
+  const exportSync = async () => {
+    setSyncing(true);
+    try {
+      const r = await api.get("/sync/export");
+      setSyncData(r.data);
+      toast.success(`${r.data.count} vehicles ready to sync`);
+    } catch { toast.error("Export failed"); }
+    finally { setSyncing(false); }
+  };
+
+  const pushSync = async () => {
+    setSyncing(true);
+    try {
+      const r = await api.post("/sync/push");
+      setPushed(true);
+      toast.success(r.data.message);
+      setTimeout(() => setPushed(false), 3000);
+    } catch { toast.error("Sync failed"); }
+    finally { setSyncing(false); }
+  };
+
+  const downloadJSON = () => {
+    if (!syncData) return;
+    const blob = new Blob([JSON.stringify(syncData.listings, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "hamroauto_listings.json"; a.click();
+    URL.revokeObjectURL(url);
   };
 
   const generate = async () => {
@@ -190,13 +222,55 @@ export default function Marketing() {
         </div>
       )}
 
+      {/* Website Sync */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5" data-testid="website-sync-section">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center"><Globe size={16} className="text-emerald-700" /></div>
+          <div>
+            <h2 className="text-base font-bold text-slate-900" style={{ fontFamily: "Manrope" }}>Website Sync · hamroauto.com.np</h2>
+            <p className="text-xs text-slate-500">Export your available inventory for listing on hamroauto.com.np</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <button onClick={exportSync} disabled={syncing} data-testid="export-sync-btn"
+            className="flex items-center justify-center gap-2 h-10 border border-emerald-200 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-semibold hover:bg-emerald-100 transition-colors disabled:opacity-60">
+            {syncing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} Export Listings
+          </button>
+          {syncData && (
+            <>
+              <button onClick={downloadJSON} data-testid="download-json-btn"
+                className="flex items-center justify-center gap-2 h-10 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors">
+                <Download size={15} /> Download JSON
+              </button>
+              <button onClick={pushSync} disabled={syncing || pushed} data-testid="push-sync-btn"
+                className={`flex items-center justify-center gap-2 h-10 rounded-lg text-sm font-semibold transition-colors ${pushed ? "bg-green-600 text-white" : "bg-slate-900 hover:bg-slate-700 text-white"} disabled:opacity-60`}>
+                {pushed ? <><Check size={15} /> Synced!</> : <><ExternalLink size={15} /> Push to hamroauto</>}
+              </button>
+            </>
+          )}
+        </div>
+        {syncData && (
+          <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100 text-sm">
+            <div className="font-semibold text-slate-700 mb-2">{syncData.count} vehicles ready</div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {syncData.listings.slice(0, 6).map((v, i) => (
+                <div key={i} className="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700">
+                  <div className="font-semibold">{v.title}</div>
+                  {v.price && <div className="text-green-700 font-medium">{formatNPR(v.price)}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Tips */}
       <div className="bg-gradient-to-r from-pink-50 to-purple-50 border border-pink-100 rounded-xl p-4">
         <h3 className="text-sm font-bold text-pink-900 mb-2">Marketing Tips for Nepal</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-pink-800">
           <span>• Post during 8-10 AM and 7-9 PM for max reach</span>
           <span>• Hamrobazar listings get 3x more views with photos</span>
-          <span>• Mention "Dashain offer" or "Tihar special" during festivals</span>
+          <span>• Mention &quot;Dashain offer&quot; or &quot;Tihar special&quot; during festivals</span>
           <span>• Add WhatsApp number for instant lead generation</span>
         </div>
       </div>

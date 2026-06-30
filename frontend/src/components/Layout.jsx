@@ -4,23 +4,24 @@ import { useAuth } from "../context/AuthContext";
 import {
   LayoutDashboard, Bike, Wrench, Users, UsersRound,
   BarChart3, Handshake, Sparkles, Settings, LogOut, Menu, X, Bell,
-  Store, Wallet, Megaphone, CreditCard
+  Store, Wallet, Megaphone, CreditCard, Boxes
 } from "lucide-react";
 
 const navItems = [
-  { path: "/",           label: "Dashboard",  icon: LayoutDashboard },
-  { path: "/inventory",  label: "Inventory",  icon: Bike },
-  { path: "/vendors",    label: "Vendors",    icon: Store },
-  { path: "/jobs",       label: "Job Cards",  icon: Wrench },
-  { path: "/customers",  label: "Customers",  icon: Users },
-  { path: "/team",       label: "Team",       icon: UsersRound },
-  { path: "/finance",    label: "Finance",    icon: Wallet },
-  { path: "/emi",        label: "EMI",        icon: CreditCard },
-  { path: "/marketing",  label: "Marketing",  icon: Megaphone },
-  { path: "/partners",   label: "Partners",   icon: Handshake },
-  { path: "/reports",    label: "Reports",    icon: BarChart3 },
-  { path: "/ai",         label: "AI Assistant", icon: Sparkles },
-  { path: "/settings",   label: "Settings",   icon: Settings },
+  { path: "/",             label: "Dashboard",    icon: LayoutDashboard },
+  { path: "/inventory",    label: "Inventory",    icon: Bike },
+  { path: "/spare-parts",  label: "Spare Parts",  icon: Boxes },
+  { path: "/vendors",      label: "Vendors",      icon: Store },
+  { path: "/jobs",         label: "Job Cards",    icon: Wrench },
+  { path: "/customers",    label: "Customers",    icon: Users },
+  { path: "/team",         label: "Team",         icon: UsersRound },
+  { path: "/finance",      label: "Finance",      icon: Wallet },
+  { path: "/emi",          label: "EMI",          icon: CreditCard },
+  { path: "/marketing",    label: "Marketing",    icon: Megaphone },
+  { path: "/partners",     label: "Partners",     icon: Handshake },
+  { path: "/reports",      label: "Reports",      icon: BarChart3 },
+  { path: "/ai",           label: "AI Assistant", icon: Sparkles },
+  { path: "/settings",     label: "Settings",     icon: Settings },
 ];
 
 export default function Layout() {

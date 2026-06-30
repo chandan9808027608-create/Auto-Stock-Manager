@@ -1,6 +1,7 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -8,9 +9,12 @@ from passlib.context import CryptContext
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-import os, logging, jwt, uuid, json
+import os, logging, jwt, uuid, json, shutil, base64
 from pydantic import BaseModel
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+
+UPLOAD_DIR = Path(__file__).parent / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1034,10 +1038,223 @@ async def startup():
             {"id": str(uuid.uuid4()), "name": "You (Owner)", "capital_contribution": 500000, "stake_percentage": 33.34, "contact": "", "created_at": now},
         ])
 
-app.include_router(api_router)
 app.add_middleware(CORSMiddleware, allow_credentials=True,
                    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
                    allow_methods=["*"], allow_headers=["*"])
 
+
+# ══════════════════════════════════════════════════════════════════════
+# ── VEHICLE PHOTO UPLOAD ──────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_PHOTO_SIZE = 5 * 1024 * 1024  # 5 MB
+
+@api_router.get("/vehicles/{vid}/photos")
+async def get_vehicle_photos(vid: str, cu: dict = Depends(get_current_user)):
+    v = await db.vehicles.find_one({"id": vid}, {"_id": 0, "photos": 1})
+    if not v: raise HTTPException(404, "Vehicle not found")
+    return v.get("photos", [])
+
+@api_router.post("/vehicles/{vid}/photos")
+async def upload_vehicle_photo(vid: str, file: UploadFile = File(...), cu: dict = Depends(get_current_user)):
+    v = await db.vehicles.find_one({"id": vid})
+    if not v: raise HTTPException(404, "Vehicle not found")
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(400, f"File type {file.content_type} not allowed. Use JPEG/PNG/WebP.")
+    content = await file.read()
+    if len(content) > MAX_PHOTO_SIZE:
+        raise HTTPException(400, "File too large. Max 5MB.")
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "jpg"
+    photo_id = str(uuid.uuid4())
+    filename = f"vehicle_{vid}_{photo_id}.{ext}"
+    filepath = UPLOAD_DIR / filename
+    with open(filepath, "wb") as f: f.write(content)
+    photo = {"id": photo_id, "url": f"/uploads/{filename}", "filename": filename,
+             "uploaded_at": datetime.now(timezone.utc).isoformat(), "size": len(content)}
+    await db.vehicles.update_one({"id": vid}, {"$push": {"photos": photo}})
+    return photo
+
+@api_router.delete("/vehicles/{vid}/photos/{photo_id}")
+async def delete_vehicle_photo(vid: str, photo_id: str, cu: dict = Depends(get_current_user)):
+    v = await db.vehicles.find_one({"id": vid}, {"_id": 0, "photos": 1})
+    if not v: raise HTTPException(404, "Vehicle not found")
+    photos = v.get("photos", [])
+    photo = next((p for p in photos if p["id"] == photo_id), None)
+    if not photo: raise HTTPException(404, "Photo not found")
+    filepath = UPLOAD_DIR / photo["filename"]
+    if filepath.exists(): filepath.unlink()
+    await db.vehicles.update_one({"id": vid}, {"$pull": {"photos": {"id": photo_id}}})
+    return {"message": "Photo deleted"}
+
+# ══════════════════════════════════════════════════════════════════════
+# ── LEGAL DOCUMENT UPLOAD ─────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════
+ALLOWED_DOC_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/webp"}
+DOC_TYPES = ["bluebook", "insurance", "tax_clearance", "transfer", "other"]
+
+@api_router.get("/vehicles/{vid}/legal-documents")
+async def get_legal_documents(vid: str, cu: dict = Depends(get_current_user)):
+    v = await db.vehicles.find_one({"id": vid}, {"_id": 0, "legal_documents": 1})
+    if not v: raise HTTPException(404, "Vehicle not found")
+    return v.get("legal_documents", [])
+
+@api_router.post("/vehicles/{vid}/legal-documents")
+async def upload_legal_document(vid: str, file: UploadFile = File(...), doc_type: str = Form("other"), cu: dict = Depends(get_current_user)):
+    v = await db.vehicles.find_one({"id": vid})
+    if not v: raise HTTPException(404, "Vehicle not found")
+    if file.content_type not in ALLOWED_DOC_TYPES:
+        raise HTTPException(400, "Only PDF/JPEG/PNG allowed for documents.")
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(400, "File too large. Max 10MB.")
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "pdf"
+    doc_id = str(uuid.uuid4())
+    filename = f"doc_{vid}_{doc_id}.{ext}"
+    filepath = UPLOAD_DIR / filename
+    with open(filepath, "wb") as f: f.write(content)
+    doc = {"id": doc_id, "url": f"/uploads/{filename}", "filename": filename,
+           "doc_type": doc_type, "original_name": file.filename,
+           "uploaded_at": datetime.now(timezone.utc).isoformat(), "size": len(content)}
+    await db.vehicles.update_one({"id": vid}, {"$push": {"legal_documents": doc}})
+    # Update status field
+    status_field = f"{doc_type}_status" if doc_type != "other" else None
+    if status_field: await db.vehicles.update_one({"id": vid}, {"$set": {status_field: "ok"}})
+    return doc
+
+@api_router.delete("/vehicles/{vid}/legal-documents/{doc_id}")
+async def delete_legal_document(vid: str, doc_id: str, cu: dict = Depends(get_current_user)):
+    v = await db.vehicles.find_one({"id": vid}, {"_id": 0, "legal_documents": 1})
+    if not v: raise HTTPException(404, "Vehicle not found")
+    docs = v.get("legal_documents", [])
+    doc = next((d for d in docs if d["id"] == doc_id), None)
+    if not doc: raise HTTPException(404, "Document not found")
+    filepath = UPLOAD_DIR / doc["filename"]
+    if filepath.exists(): filepath.unlink()
+    await db.vehicles.update_one({"id": vid}, {"$pull": {"legal_documents": {"id": doc_id}}})
+    return {"message": "Document deleted"}
+
+# ══════════════════════════════════════════════════════════════════════
+# ── SPARE PARTS ───────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════
+class SparePartCreate(BaseModel):
+    name: str
+    category: str = "General"
+    brand_compatibility: Optional[str] = None
+    part_number: Optional[str] = None
+    quantity: int = 0
+    unit_cost: float = 0
+    selling_price: Optional[float] = None
+    supplier: Optional[str] = None
+    min_stock_alert: int = 2
+    location: Optional[str] = None
+    notes: Optional[str] = None
+
+class SparePartUpdate(BaseModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    brand_compatibility: Optional[str] = None
+    part_number: Optional[str] = None
+    quantity: Optional[int] = None
+    unit_cost: Optional[float] = None
+    selling_price: Optional[float] = None
+    supplier: Optional[str] = None
+    min_stock_alert: Optional[int] = None
+    location: Optional[str] = None
+    notes: Optional[str] = None
+
+@api_router.get("/spare-parts")
+async def get_spare_parts(category: Optional[str] = None, low_stock: Optional[bool] = None, cu: dict = Depends(get_current_user)):
+    query = {}
+    if category: query["category"] = category
+    parts = await db.spare_parts.find(query, {"_id": 0}).to_list(1000)
+    if low_stock: parts = [p for p in parts if p.get("quantity", 0) <= p.get("min_stock_alert", 2)]
+    for p in parts:
+        p["total_value"] = p.get("quantity", 0) * p.get("unit_cost", 0)
+        p["low_stock"] = p.get("quantity", 0) <= p.get("min_stock_alert", 2)
+        p["margin"] = round(((p.get("selling_price", 0) - p.get("unit_cost", 0)) / p.get("unit_cost", 1)) * 100, 1) if p.get("selling_price") and p.get("unit_cost") else None
+    return parts
+
+@api_router.post("/spare-parts")
+async def create_spare_part(part: SparePartCreate, cu: dict = Depends(get_current_user)):
+    doc = {"id": str(uuid.uuid4()), **part.dict(), "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.spare_parts.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/spare-parts/{pid}")
+async def update_spare_part(pid: str, part: SparePartUpdate, cu: dict = Depends(get_current_user)):
+    upd = {k: v for k, v in part.dict().items() if v is not None}
+    if not upd: raise HTTPException(400, "No fields to update")
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    r = await db.spare_parts.update_one({"id": pid}, {"$set": upd})
+    if r.matched_count == 0: raise HTTPException(404, "Not found")
+    doc = await db.spare_parts.find_one({"id": pid}, {"_id": 0})
+    return doc
+
+@api_router.delete("/spare-parts/{pid}")
+async def delete_spare_part(pid: str, cu: dict = Depends(get_current_user)):
+    r = await db.spare_parts.delete_one({"id": pid})
+    if r.deleted_count == 0: raise HTTPException(404, "Not found")
+    return {"message": "Deleted"}
+
+@api_router.post("/spare-parts/{pid}/adjust-stock")
+async def adjust_spare_stock(pid: str, req: dict, cu: dict = Depends(get_current_user)):
+    delta = req.get("delta", 0)
+    p = await db.spare_parts.find_one({"id": pid}, {"_id": 0, "quantity": 1})
+    if not p: raise HTTPException(404, "Not found")
+    new_qty = max(0, p.get("quantity", 0) + int(delta))
+    await db.spare_parts.update_one({"id": pid}, {"$set": {"quantity": new_qty}})
+    return {"quantity": new_qty}
+
+@api_router.get("/spare-parts/summary")
+async def spare_parts_summary(cu: dict = Depends(get_current_user)):
+    parts = await db.spare_parts.find({}, {"_id": 0}).to_list(1000)
+    total_value = sum(p.get("quantity", 0) * p.get("unit_cost", 0) for p in parts)
+    low_stock = [p for p in parts if p.get("quantity", 0) <= p.get("min_stock_alert", 2)]
+    categories = list({p.get("category", "General") for p in parts})
+    return {"total_parts": len(parts), "total_value": total_value, "low_stock_count": len(low_stock), "categories": categories}
+
+# ══════════════════════════════════════════════════════════════════════
+# ── WEBSITE SYNC (hamroauto.com.np) ───────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════
+@api_router.get("/sync/export")
+async def export_for_website(cu: dict = Depends(get_current_user)):
+    """Export available inventory in hamroauto.com.np listing format."""
+    vehicles = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(200)
+    listings = []
+    for v in vehicles:
+        listings.append({
+            "title": f"{v.get('brand')} {v.get('model')} {v.get('year')}",
+            "brand": v.get("brand"), "model": v.get("model"), "year": v.get("year"),
+            "price": v.get("selling_price"), "engine_cc": v.get("engine_cc"),
+            "fuel_type": v.get("fuel_type"), "ownership": v.get("ownership_number"),
+            "color": v.get("color"), "condition": v.get("condition"),
+            "km_run": v.get("kilometer_run"), "registration": v.get("registration_number"),
+            "notes": v.get("notes"),
+            "docs": {
+                "bluebook": v.get("bluebook_status"), "insurance": v.get("insurance_status"),
+                "tax": v.get("tax_clearance_status"), "transfer": v.get("transfer_status"),
+            },
+            "photos": [p["url"] for p in v.get("photos", [])],
+            "contact": "Hamro G&G Auto · Kathmandu · 98XXXXXXXX",
+            "source": "hamro_gng_auto",
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+        })
+    return {"count": len(listings), "listings": listings, "exported_at": datetime.now(timezone.utc).isoformat()}
+
+@api_router.post("/sync/push")
+async def push_to_website(cu: dict = Depends(get_current_user)):
+    """Simulate push to hamroauto.com.np — in production connect to their API."""
+    vehicles = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(200)
+    sync_log = {"pushed_at": datetime.now(timezone.utc).isoformat(), "count": len(vehicles),
+                "status": "exported", "message": f"Ready to sync {len(vehicles)} vehicles to hamroauto.com.np"}
+    await db.sync_logs.insert_one({**sync_log, "id": str(uuid.uuid4())})
+    sync_log.pop("_id", None)
+    return sync_log
+
 @app.on_event("shutdown")
 async def shutdown(): client.close()
+
+
+app.include_router(api_router)
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
