@@ -84,28 +84,14 @@ Build an advanced AI-powered automobile dealership management platform for Nepal
 
 ## Pending / In Progress
 
-### P1 — Legal Document Tracking (Module 11)
-- Document status fields exist (bluebook, insurance, tax, transfer)
-- File upload not yet implemented
-
-### P1 — Website Sync (Module 12)
-- Webhook structure for hamroauto.com.np sync not started
-
-### P2 — Marketing Automation (Module 13)
-- AI caption generation endpoint exists (`/api/marketing/generate`)
-- Marketing.jsx page needs to be wired to the endpoint
-
 ### P2 — Communication Center (Module 14)
 - Not started
 
 ### P2 — Multi-branch Architecture
 - Not started
 
-### P2 — Finance Page
-- Finance.jsx exists and routes but needs full backend wiring
-
-### P2 — EMI Calculator
-- EMI.jsx exists with UI but loan plan CRUD needs backend wiring
+### P2 — EMI Calculator wiring
+- EMI.jsx exists with UI but loan plan CRUD needs backend verification
 
 ---
 
