@@ -320,7 +320,29 @@ async def get_vehicles(status: Optional[str] = None, brand: Optional[str] = None
     if status and status != "all": q["status"] = status
     if brand and brand != "all": q["brand"] = brand
     vehicles = await db.vehicles.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    return [await enrich_vehicle(v) for v in vehicles]
+    if not vehicles:
+        return []
+    # Batch-load all expenses in one query (avoids N+1)
+    vehicle_ids = [v["id"] for v in vehicles]
+    all_exps = await db.expenses.find({"vehicle_id": {"$in": vehicle_ids}}, {"_id": 0}).to_list(10000)
+    exps_by_vehicle: dict = {}
+    for e in all_exps:
+        exps_by_vehicle.setdefault(e["vehicle_id"], []).append(e)
+    # Enrich each vehicle using pre-loaded expenses
+    def enrich_with_expenses(v: dict, exps: list) -> dict:
+        v["aging"] = stock_aging(v.get("purchase_date", ""))
+        total_exp = sum(e["amount"] for e in exps)
+        v["total_expenses"] = total_exp
+        v["total_investment"] = v.get("purchase_price", 0) + total_exp + v.get("accessories_cost", 0)
+        sp = v.get("selling_price") or 0
+        if sp > 0:
+            v["expected_profit"] = sp - v["total_investment"]
+            v["profit_margin"] = round((v["expected_profit"] / sp) * 100, 2)
+            v["low_margin"] = v["profit_margin"] < 8
+        else:
+            v["expected_profit"] = None; v["profit_margin"] = None; v["low_margin"] = False
+        return v
+    return [enrich_with_expenses(v, exps_by_vehicle.get(v["id"], [])) for v in vehicles]
 
 @api_router.post("/vehicles")
 async def create_vehicle(vehicle: VehicleCreate, cu: dict = Depends(get_current_user)):
