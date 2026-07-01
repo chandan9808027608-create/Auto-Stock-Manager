@@ -1,4 +1,101 @@
-# Hamro G&G Auto OS — PRD
+# Hamro G&G Auto OS — Product Requirements Document
+
+## Original Problem Statement
+Build "Hamro G&G Auto OS", an advanced AI-powered automobile dealership management platform for Nepal, managing second-hand bikes/scooters. Core constraints: clean professional light theme, English language, NPR currency, BS (Bikram Sambat) date system.
+
+## 18 Core Modules
+1. Inventory Management  
+2. Vendor Management  
+3. AI Pricing Engine  
+4. Stock Aging  
+5. Customer CRM  
+6. Sales Management  
+7. Staff & Mechanic Management  
+8. Finance & Accounting  
+9. Partner Dashboard  
+10. EMI Calculator  
+11. Legal Documents  
+12. Website Sync  
+13. Marketing Automation  
+14. Communication Center  
+15. QR Vehicle System  
+16. AI Chatbot  
+17. Nepal Festival Intelligence  
+18. Executive Dashboard  
+
+## Tech Stack
+- Frontend: React (CRA), Tailwind CSS, shadcn/UI, Recharts
+- Backend: FastAPI (Python), MongoDB
+- Auth: JWT (sessionStorage)
+- AI: Emergent LLM Key (Gemini Flash via emergentintegrations)
+- Dates: BS (Bikram Sambat) via `@sbmdkl/nepali-date-converter`
+- QR: `qrcode.react`
+- File Uploads: python-multipart
+
+## Code Architecture
+```
+/app/
+├── backend/
+│   ├── server.py              # FastAPI app (1270 lines, refactored with helpers)
+│   ├── requirements.txt
+│   └── .env
+├── frontend/src/
+│   ├── App.js                 # React Router
+│   ├── context/AuthContext.jsx
+│   ├── utils/api.js, helpers.js, nepali-date.js
+│   ├── components/BSDatePicker.jsx, VendorAutocomplete.jsx, Layout.jsx
+│   └── pages/
+│       ├── Inventory.jsx (233 lines)     # uses AddVehicleModal.jsx
+│       ├── AddVehicleModal.jsx           # extracted from Inventory
+│       ├── VehicleDetail.jsx (464 lines) # uses VehicleModals.jsx
+│       ├── VehicleModals.jsx             # extracted: Expense, Job, Edit, QR modals
+│       ├── Dashboard.jsx, Finance.jsx, Reports.jsx
+│       ├── AIAssistant.jsx, Marketing.jsx, EMI.jsx
+│       ├── Customers.jsx, JobCards.jsx, Vendors.jsx
+│       └── ...other pages
+└── memory/PRD.md, test_credentials.md
+```
+
+## What's Implemented (as of Feb 2026)
+
+### All 18 Modules — Feature Complete
+- Full CRUD for vehicles (Inventory), vendors, customers, job cards, spare parts
+- AI Pricing, AI Festival Intelligence, AI Chatbot (Gemini Flash via Emergent LLM Key)
+- QR Code generation per vehicle
+- BS (Nepali) date system globally
+- File uploads: vehicle photos, legal documents (Bluebook, Insurance)
+- Vendor autocomplete search
+- Marketing AI captions
+- Finance dashboard: revenue, COGS, profit, partner splits
+- EMI calculator with payment tracking
+- Website sync simulation
+- JWT auth via sessionStorage
+
+### Code Quality Fixes (Feb 2026)
+- XSS vulnerabilities fixed in AIAssistant.jsx
+- Python `is` literal comparisons replaced with `==`
+- JWT migrated from localStorage to sessionStorage
+- Array index keys replaced with stable keys across all chart components
+- Empty catch blocks now log errors in VehicleDetail.jsx
+- `useMemo` added for expensive computations in Finance.jsx and VehicleDetail.jsx (placed before loading guards)
+- Nested ternary removed in VehicleDetail.jsx financial cards
+- VehicleDetail.jsx split: modals extracted to VehicleModals.jsx (464 lines vs 584)
+- Inventory.jsx split: Add Vehicle form extracted to AddVehicleModal.jsx (233 lines vs 410)
+- Backend complexity reduced: helper functions `_vehicle_investment`, `_vendor_payable`, `_emi_remaining`, `_aging_counts`, `_build_suggestions_context` extracted from `finance_summary`, `dashboard_stats`, `ai_suggestions`
+
+## Deployment Configuration
+- Vercel (frontend) + Railway (backend) split deployment
+- See /app/DEPLOYMENT.md
+
+## P0 / P1 / P2 Backlog
+
+### P2 — Upcoming
+- Communication Center (Module 14) — unified inbox UI completeness
+- EMI Calculator — full CRUD verification & payment history UI
+- Multi-branch architecture expansion
+- Partner Dashboard — profit split visualization
+- Staff commission tracking
+RD
 
 ## Original Problem Statement
 Build an advanced AI-powered automobile dealership management platform for Nepal (Hamro G&G Auto Enterprises) for second-hand bikes/scooters.
