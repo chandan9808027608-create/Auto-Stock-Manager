@@ -25,13 +25,23 @@ const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:ou
 const sel = `${inp} bg-white`;
 
 function Markdown({ text }) {
-  // Simple markdown renderer for bold, bullets
   if (!text) return null;
+  // Safe renderer — no dangerouslySetInnerHTML
   return (
-    <div className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+    <div className="text-sm text-slate-800 leading-relaxed space-y-1">
       {text.split("\n").map((line, i) => {
-        const bold = line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-        return <p key={i} className={line.startsWith("-") || line.startsWith("•") ? "ml-2" : ""} dangerouslySetInnerHTML={{ __html: bold || "&nbsp;" }} />;
+        const segments = line.split(/\*\*(.*?)\*\*/g);
+        const content = segments.map((seg, j) =>
+          j % 2 === 1 ? <strong key={j}>{seg}</strong> : seg
+        );
+        return (
+          <p
+            key={`md-${i}`}
+            className={line.startsWith("-") || line.startsWith("•") ? "ml-2" : ""}
+          >
+            {content.some(Boolean) ? content : <>&nbsp;</>}
+          </p>
+        );
       })}
     </div>
   );
@@ -226,29 +236,33 @@ function AdvisorTab() {
 // ── Sales Chatbot Tab ─────────────────────────────────────────────────
 function ChatbotTab() {
   const [messages, setMessages] = useState([
-    { role: "assistant", text: "Hi! I'm your AI sales assistant. Ask me about available vehicles, prices, or anything related to our stock!" }
+    { id: "init", role: "assistant", text: "Hi! I'm your AI sales assistant. Ask me about available vehicles, prices, or anything related to our stock!" }
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const sessionId = useRef(`chat-${Date.now()}`);
   const bottomRef = useRef(null);
+  const msgCounter = useRef(1);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const sendMessage = async () => {
     const msg = input.trim();
     if (!msg || loading) return;
+    const userMsgId = `msg-${msgCounter.current++}`;
+    const botMsgId  = `msg-${msgCounter.current++}`;
     setInput("");
-    setMessages(prev => [...prev, { role: "user", text: msg }]);
+    setMessages(prev => [...prev, { id: userMsgId, role: "user", text: msg }]);
     setLoading(true);
-    setMessages(prev => [...prev, { role: "assistant", text: "", typing: true }]);
+    setMessages(prev => [...prev, { id: botMsgId, role: "assistant", text: "", typing: true }]);
 
     try {
       const r = await api.post("/ai/chatbot", { message: msg, session_id: sessionId.current });
-      setMessages(prev => prev.map((m, i) => i === prev.length - 1 ? { role: "assistant", text: r.data.reply, typing: false } : m));
+      setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, text: r.data.reply, typing: false } : m));
       sessionId.current = r.data.session_id || sessionId.current;
-    } catch {
-      setMessages(prev => prev.map((m, i) => i === prev.length - 1 ? { role: "assistant", text: "Sorry, I couldn't connect. Please try again.", typing: false } : m));
+    } catch (err) {
+      console.error("Chatbot error:", err);
+      setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, text: "Sorry, I couldn't connect. Please try again.", typing: false } : m));
     } finally {
       setLoading(false);
     }
@@ -265,7 +279,11 @@ function ChatbotTab() {
           <div className="font-semibold text-white text-sm">G&G Sales Assistant</div>
           <div className="text-xs text-blue-100">AI-powered · Knows your current stock</div>
         </div>
-        <button onClick={() => { setMessages([{ role: "assistant", text: "Hi! I'm your AI sales assistant. Ask me about available vehicles, prices, or anything related to our stock!" }]); sessionId.current = `chat-${Date.now()}`; }}
+        <button onClick={() => {
+          setMessages([{ id: "init", role: "assistant", text: "Hi! I'm your AI sales assistant. Ask me about available vehicles, prices, or anything related to our stock!" }]);
+          sessionId.current = `chat-${Date.now()}`;
+          msgCounter.current = 1;
+        }}
           className="ml-auto p-1.5 hover:bg-white/20 rounded-lg transition-colors" title="New chat">
           <RefreshCw size={14} className="text-white" />
         </button>
@@ -273,8 +291,8 @@ function ChatbotTab() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+        {messages.map((msg) => (
+          <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
               msg.role === "user"
                 ? "bg-blue-600 text-white rounded-br-sm"
