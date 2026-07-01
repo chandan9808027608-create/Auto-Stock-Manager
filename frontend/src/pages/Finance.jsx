@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from "recharts";
 import { DollarSign, TrendingUp, Package, AlertTriangle, CreditCard, Users, ShoppingCart, Wallet } from "lucide-react";
 import api from "../utils/api";
@@ -36,20 +36,26 @@ export default function Finance() {
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
 
+  const monthlyData = useMemo(() => {
+    if (!financial) return [];
+    return Object.entries(financial.monthly_breakdown)
+      .filter(([k]) => k !== "unknown")
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, d]) => ({ month, ...d }));
+  }, [financial]);
+
+  const totalCapital = useMemo(() => partners.reduce((s, p) => s + p.capital_contribution, 0), [partners]);
+  const totalProfit = useMemo(() => financial?.total_profit || 0, [financial]);
+
+  const pieData = useMemo(() => {
+    if (!summary) return [];
+    return [
+      { name: "Revenue", value: summary.total_revenue, fill: "#2563EB" },
+      { name: "Cost of Goods", value: summary.total_cogs, fill: "#94A3B8" },
+    ].filter(d => d.value > 0);
+  }, [summary]);
+
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full" /></div>;
-
-  const monthlyData = financial ? Object.entries(financial.monthly_breakdown)
-    .filter(([k]) => k !== "unknown")
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([month, d]) => ({ month, ...d })) : [];
-
-  const totalCapital = partners.reduce((s, p) => s + p.capital_contribution, 0);
-  const totalProfit = financial?.total_profit || 0;
-
-  const pieData = summary ? [
-    { name: "Revenue", value: summary.total_revenue, fill: "#2563EB" },
-    { name: "Cost of Goods", value: summary.total_cogs, fill: "#94A3B8" },
-  ].filter(d => d.value > 0) : [];
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -111,7 +117,7 @@ export default function Finance() {
                 <PieChart>
                   <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90}
                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={12}>
-                    {pieData.map((e, i) => <Cell key={i} fill={e.fill} />)}
+                    {pieData.map((e) => <Cell key={e.name} fill={e.fill} />)}
                   </Pie>
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Tooltip formatter={(v) => formatNPR(v)} contentStyle={{ fontSize: 12, borderRadius: 8 }} />

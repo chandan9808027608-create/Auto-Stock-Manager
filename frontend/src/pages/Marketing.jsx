@@ -254,7 +254,7 @@ export default function Marketing() {
             <div className="font-semibold text-slate-700 mb-2">{syncData.count} vehicles ready</div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {syncData.listings.slice(0, 6).map((v, i) => (
-                <div key={i} className="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700">
+                <div key={v.id || `listing-${i}`} className="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700">
                   <div className="font-semibold">{v.title}</div>
                   {v.price && <div className="text-green-700 font-medium">{formatNPR(v.price)}</div>}
                 </div>

@@ -232,7 +232,7 @@ export default function Dashboard() {
               <YAxis tick={{ fontSize: 11, fill: "#64748B" }} allowDecimals={false} />
               <Tooltip formatter={(val) => [`${val} vehicles`]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
               <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                {agingData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                {agingData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>

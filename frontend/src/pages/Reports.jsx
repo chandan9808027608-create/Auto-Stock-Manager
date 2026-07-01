@@ -88,7 +88,7 @@ export default function Reports() {
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748B" }} />
                 <YAxis tick={{ fontSize: 11, fill: "#64748B" }} allowDecimals={false} />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                <Bar dataKey="count" radius={[4,4,0,0]}>{agingData.map((e,i) => <Cell key={i} fill={e.color} />)}</Bar>
+                <Bar dataKey="count" radius={[4,4,0,0]}>{agingData.map((e) => <Cell key={e.name} fill={e.color} />)}</Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -115,7 +115,7 @@ export default function Reports() {
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
                   <Pie data={sourceData} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`} labelLine={false} fontSize={11}>
-                    {sourceData.map((_, i) => <Cell key={i} fill={MONTH_COLORS[i % MONTH_COLORS.length]} />)}
+                    {sourceData.map((entry, i) => <Cell key={entry.name} fill={MONTH_COLORS[i % MONTH_COLORS.length]} />)}
                   </Pie>
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
@@ -138,8 +138,8 @@ export default function Reports() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {[...inventory.dead_stock, ...inventory.slow_moving].map((v, i) => (
-                      <tr key={i} className="table-row-hover">
+                    {[...inventory.dead_stock, ...inventory.slow_moving].map((v) => (
+                      <tr key={v.id} className="table-row-hover">
                         <td className="px-3 py-3 font-medium text-slate-900">{v.brand} {v.model} {v.year}</td>
                         <td className="px-3 py-3 text-slate-600">{v.days} days</td>
                         <td className="px-3 py-3">

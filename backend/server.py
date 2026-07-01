@@ -83,7 +83,71 @@ async def enrich_vehicle(v: dict) -> dict:
         v["expected_profit"] = None; v["profit_margin"] = None; v["low_margin"] = False
     return v
 
-# ── Models ────────────────────────────────────────────────────────────
+# ── Helper: compute total investment for a vehicle ────────────────────
+async def _vehicle_investment(vehicle_id: str, vehicle: dict) -> float:
+    """Returns purchase_price + accessories + all expenses for a vehicle."""
+    exps = await db.expenses.find({"vehicle_id": vehicle_id}, {"_id": 0}).to_list(200)
+    return vehicle.get("purchase_price", 0) + vehicle.get("accessories_cost", 0) + sum(e["amount"] for e in exps)
+
+# ── Helper: compute total amount owed to a vendor (payable) ──────────
+async def _vendor_payable(vendor_id: str) -> float:
+    """Returns max(0, total_purchased - total_paid) for a vendor."""
+    veh = await db.vehicles.find({"vendor_id": vendor_id}, {"_id": 0}).to_list(200)
+    owed = sum(v.get("purchase_price", 0) for v in veh)
+    pmts = await db.vendor_payments.find({"vendor_id": vendor_id}, {"_id": 0}).to_list(200)
+    paid = sum(p["amount"] for p in pmts)
+    return max(0.0, owed - paid)
+
+# ── Helper: compute total remaining balance for an EMI record ─────────
+async def _emi_remaining(emi_id: str, loan_amount: float) -> float:
+    pmts = await db.emi_payments.find({"emi_id": emi_id}, {"_id": 0}).to_list(200)
+    paid = sum(p["amount"] for p in pmts)
+    return max(0.0, loan_amount - paid)
+
+# ── Helper: classify aging counts for a list of available vehicles ────
+def _aging_counts(vehicles: list) -> dict:
+    counts = {"fresh": 0, "normal": 0, "slow": 0, "dead": 0}
+    for v in vehicles:
+        cat = stock_aging(v.get("purchase_date", ""))["category"]
+        counts[cat] = counts.get(cat, 0) + 1
+    return counts
+
+# ── Helper: build ai_suggestions context data by type ────────────────
+async def _build_suggestions_context(context_type: str) -> dict:
+    if context_type == "inventory":
+        vehicles = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(50)
+        slow_list = []
+        for v in vehicles:
+            ag = stock_aging(v.get("purchase_date", ""))
+            if ag["category"] in ["slow", "dead"]:
+                exps = await db.expenses.find({"vehicle_id": v["id"]}, {"_id": 0}).to_list(50)
+                slow_list.append({
+                    "brand": v.get("brand"), "model": v.get("model"),
+                    "days": ag["days"], "category": ag["category"],
+                    "purchase_price": v.get("purchase_price"), "selling_price": v.get("selling_price"),
+                    "total_investment": v.get("purchase_price", 0) + sum(e["amount"] for e in exps)
+                })
+        return {"available_count": len(vehicles), "slow_and_dead_stock": slow_list[:6]}
+    if context_type == "finance":
+        avail = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(500)
+        locked = sum(v.get("purchase_price", 0) for v in avail)
+        return {
+            "locked_capital_NPR": locked,
+            "total_vehicles": await db.vehicles.count_documents({}),
+            "sold_vehicles": await db.vehicles.count_documents({"status": "sold"})
+        }
+    if context_type == "customer":
+        custs = await db.customers.find({}, {"_id": 0}).to_list(20)
+        return {"total_customers": len(custs), "customers": [{"name": c["name"], "contact": c.get("contact_number")} for c in custs[:8]]}
+    if context_type == "festival":
+        avail = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(50)
+        return {"available_stock": len(avail), "vehicles": [{"brand": v.get("brand"), "model": v.get("model"), "price": v.get("selling_price")} for v in avail[:10]]}
+    if context_type == "vendor":
+        vendors = await db.vendors.find({}, {"_id": 0}).to_list(20)
+        return {"total_vendors": len(vendors), "vendors_with_due": sum(1 for _ in vendors)}
+    return {}
+
+
 class LoginRequest(BaseModel):
     username: str; password: str
 
@@ -626,39 +690,24 @@ async def add_emi_payment(payment: EMIPaymentCreate, cu: dict = Depends(get_curr
 # ── FINANCE ───────────────────────────────────────────────────────────
 @api_router.get("/finance/summary")
 async def finance_summary(cu: dict = Depends(get_current_user)):
+    # Inventory value (available vehicles)
     avail = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(1000)
-    inventory_value = 0
-    for v in avail:
-        exps = await db.expenses.find({"vehicle_id": v["id"]}, {"_id": 0}).to_list(200)
-        inventory_value += v.get("purchase_price", 0) + v.get("accessories_cost", 0) + sum(e["amount"] for e in exps)
-
+    inventory_value = sum(
+        [await _vehicle_investment(v["id"], v) for v in avail]
+    )
+    # Revenue & COGS from sold vehicles
     sold = await db.vehicles.find({"status": "sold"}, {"_id": 0}).to_list(1000)
-    total_revenue, total_cogs = 0, 0
-    for v in sold:
-        exps = await db.expenses.find({"vehicle_id": v["id"]}, {"_id": 0}).to_list(200)
-        inv = v.get("purchase_price", 0) + v.get("accessories_cost", 0) + sum(e["amount"] for e in exps)
-        total_revenue += v.get("selling_price") or 0
-        total_cogs += inv
-
+    total_revenue = sum(v.get("selling_price") or 0 for v in sold)
+    total_cogs = sum([await _vehicle_investment(v["id"], v) for v in sold])
     gross_profit = total_revenue - total_cogs
 
     # Vendor payables
     vendors = await db.vendors.find({}, {"_id": 0}).to_list(100)
-    vendor_payables = 0
-    for vendor in vendors:
-        veh = await db.vehicles.find({"vendor_id": vendor["id"]}, {"_id": 0}).to_list(200)
-        owed = sum(v.get("purchase_price", 0) for v in veh)
-        pmts = await db.vendor_payments.find({"vendor_id": vendor["id"]}, {"_id": 0}).to_list(200)
-        paid = sum(p["amount"] for p in pmts)
-        vendor_payables += max(0, owed - paid)
+    vendor_payables = sum([await _vendor_payable(v["id"]) for v in vendors])
 
     # EMI receivables
     emis = await db.emi_records.find({"status": "active"}, {"_id": 0}).to_list(200)
-    emi_receivables = 0
-    for e in emis:
-        pmts = await db.emi_payments.find({"emi_id": e["id"]}, {"_id": 0}).to_list(200)
-        paid = sum(p["amount"] for p in pmts)
-        emi_receivables += max(0, e.get("loan_amount", 0) - paid)
+    emi_receivables = sum([await _emi_remaining(e["id"], e.get("loan_amount", 0)) for e in emis])
 
     partners = await db.partners.find({}, {"_id": 0}).to_list(100)
     total_capital = sum(p.get("capital_contribution", 0) for p in partners)
@@ -731,39 +780,22 @@ async def dashboard_stats(cu: dict = Depends(get_current_user)):
     in_repair = await db.vehicles.count_documents({"status": "in_repair"})
 
     avail_v = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(1000)
-    locked_capital, dead_cnt, slow_cnt, normal_cnt, fresh_cnt = 0, 0, 0, 0, 0
-    for v in avail_v:
-        exps = await db.expenses.find({"vehicle_id": v["id"]}, {"_id": 0}).to_list(200)
-        locked_capital += v.get("purchase_price", 0) + v.get("accessories_cost", 0) + sum(e["amount"] for e in exps)
-        ag = stock_aging(v.get("purchase_date", ""))
-        if ag["category"] == "dead": dead_cnt += 1
-        elif ag["category"] == "slow": slow_cnt += 1
-        elif ag["category"] == "normal": normal_cnt += 1
-        else: fresh_cnt += 1
+    locked_capital = sum([await _vehicle_investment(v["id"], v) for v in avail_v])
+    aging = _aging_counts(avail_v)
 
     sold_v = await db.vehicles.find({"status": "sold"}, {"_id": 0}).to_list(1000)
-    total_profit = 0
-    for v in sold_v:
-        exps = await db.expenses.find({"vehicle_id": v["id"]}, {"_id": 0}).to_list(200)
-        inv = v.get("purchase_price", 0) + v.get("accessories_cost", 0) + sum(e["amount"] for e in exps)
-        total_profit += (v.get("selling_price") or 0) - inv
+    sold_profits = [(v.get("selling_price") or 0) - (await _vehicle_investment(v["id"], v)) for v in sold_v]
+    total_profit = sum(sold_profits)
 
-    # Vendor dues alert
     vendors = await db.vendors.find({}, {"_id": 0}).to_list(100)
-    total_vendor_due = 0
-    for vendor in vendors:
-        veh = await db.vehicles.find({"vendor_id": vendor["id"]}, {"_id": 0}).to_list(200)
-        owed = sum(v.get("purchase_price", 0) for v in veh)
-        pmts = await db.vendor_payments.find({"vendor_id": vendor["id"]}, {"_id": 0}).to_list(200)
-        paid = sum(p["amount"] for p in pmts)
-        total_vendor_due += max(0, owed - paid)
+    total_vendor_due = sum([await _vendor_payable(v["id"]) for v in vendors])
 
     return {
         "total_vehicles": total, "available": available, "sold": sold,
         "reserved": reserved, "in_repair": in_repair,
         "locked_capital": locked_capital, "total_realized_profit": total_profit,
-        "dead_stock_count": dead_cnt, "slow_moving_count": slow_cnt,
-        "normal_count": normal_cnt, "fresh_count": fresh_cnt,
+        "dead_stock_count": aging["dead"], "slow_moving_count": aging["slow"],
+        "normal_count": aging["normal"], "fresh_count": aging["fresh"],
         "pending_jobs": await db.job_cards.count_documents({"status": "pending"}),
         "in_progress_jobs": await db.job_cards.count_documents({"status": "in_progress"}),
         "total_customers": await db.customers.count_documents({}),
@@ -859,33 +891,7 @@ async def accounting_summary(start_date: str, end_date: str, cu: dict = Depends(
 async def ai_suggestions(req: AIRequest, cu: dict = Depends(get_current_user)):
     if not EMERGENT_LLM_KEY:
         raise HTTPException(500, "AI not configured")
-    ctx = {}
-    if req.context_type == "inventory":
-        vehicles = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(50)
-        slow_list = []
-        for v in vehicles:
-            ag = stock_aging(v.get("purchase_date", ""))
-            if ag["category"] in ["slow", "dead"]:
-                exps = await db.expenses.find({"vehicle_id": v["id"]}, {"_id": 0}).to_list(50)
-                slow_list.append({"brand": v.get("brand"), "model": v.get("model"),
-                                   "days": ag["days"], "category": ag["category"],
-                                   "purchase_price": v.get("purchase_price"), "selling_price": v.get("selling_price"),
-                                   "total_investment": v.get("purchase_price", 0) + sum(e["amount"] for e in exps)})
-        ctx = {"available_count": len(vehicles), "slow_and_dead_stock": slow_list[:6]}
-    elif req.context_type == "finance":
-        avail = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(500)
-        locked = sum(v.get("purchase_price", 0) for v in avail)
-        ctx = {"locked_capital_NPR": locked, "total_vehicles": await db.vehicles.count_documents({}),
-               "sold_vehicles": await db.vehicles.count_documents({"status": "sold"})}
-    elif req.context_type == "customer":
-        custs = await db.customers.find({}, {"_id": 0}).to_list(20)
-        ctx = {"total_customers": len(custs), "customers": [{"name": c["name"], "contact": c.get("contact_number")} for c in custs[:8]]}
-    elif req.context_type == "festival":
-        avail = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(50)
-        ctx = {"available_stock": len(avail), "vehicles": [{"brand": v.get("brand"), "model": v.get("model"), "price": v.get("selling_price")} for v in avail[:10]]}
-    elif req.context_type == "vendor":
-        vendors = await db.vendors.find({}, {"_id": 0}).to_list(20)
-        ctx = {"total_vendors": len(vendors), "vendors_with_due": sum(1 for v in vendors)}
+    ctx = await _build_suggestions_context(req.context_type)
     if req.additional_context:
         ctx["user_note"] = req.additional_context
     system_msg = """You are an expert business advisor for Hamro G&G Auto Enterprises, Kathmandu, Nepal.
