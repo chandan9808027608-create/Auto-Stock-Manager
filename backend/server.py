@@ -26,13 +26,16 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ.get('JWT_SECRET', 'hamro-gng-2024')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 
-app = FastAPI()
+app = FastAPI(title="Hamro G&G Auto OS", version="1.0.0")
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+@app.get("/api/health")
+async def health(): return {"status": "ok", "service": "Hamro G&G Auto OS"}
 
 # ── Auth Helpers ──────────────────────────────────────────────────────
 def hash_pw(pw: str) -> str: return pwd_context.hash(pw)

@@ -1,0 +1,141 @@
+# Hamro G&G Auto OS — Deployment Guide
+## Vercel (Frontend) + Railway (Backend) + MongoDB Atlas
+
+---
+
+## Overview
+
+| Service | What it hosts | Cost |
+|---|---|---|
+| **Vercel** | React frontend | Free |
+| **Railway** | FastAPI backend + file uploads | Free starter ($5/mo for volumes) |
+| **MongoDB Atlas** | Database | Free (512 MB) |
+
+---
+
+## Step 1 — MongoDB Atlas (Database)
+
+1. Go to **[cloud.mongodb.com](https://cloud.mongodb.com)** → Create account
+2. Click **"Build a Cluster"** → Choose **Free (M0 Shared)**
+3. Select region closest to Nepal (Singapore `ap-southeast-1` recommended)
+4. **Connect** → **Drivers** → Copy the connection string
+5. Replace `<password>` with your DB user password
+6. Your `MONGO_URL` will look like:
+   ```
+   mongodb+srv://username:password@cluster0.abcde.mongodb.net/?retryWrites=true&w=majority
+   ```
+
+> **Important**: In Atlas → Network Access → Add IP Address → **"Allow Access from Anywhere"** (`0.0.0.0/0`)
+
+---
+
+## Step 2 — Railway (Backend)
+
+1. Go to **[railway.app](https://railway.app)** → Login with GitHub
+2. Click **"New Project"** → **"Deploy from GitHub repo"**
+3. Select your repo → Choose the **`backend`** folder as root directory
+
+   > If Railway asks for root directory, set it to `backend`
+
+4. Railway auto-detects the `Dockerfile` and starts building
+
+5. Go to **Variables** tab and add ALL variables from `backend/.env.example`:
+   ```
+   MONGO_URL         = mongodb+srv://...  (from Step 1)
+   DB_NAME           = hamro_gng_auto
+   JWT_SECRET        = any-long-random-string
+   EMERGENT_LLM_KEY  = sk-emergent-...  (your key from Profile → Universal Key)
+   CORS_ORIGINS      = https://your-app.vercel.app  (set after Step 3)
+   ```
+
+6. After deploy, go to **Settings** → **Networking** → **Generate Domain**
+   - Your backend URL: `https://hamro-gng-auto-production.up.railway.app`
+
+7. **Persistent File Storage** (for vehicle photos & legal documents):
+   - Railway dashboard → Your service → **Volumes** tab
+   - Add volume: Mount path = `/app/uploads`
+   - This keeps uploaded files safe across deployments
+
+---
+
+## Step 3 — Vercel (Frontend)
+
+1. Go to **[vercel.com](https://vercel.com)** → Login with GitHub
+2. Click **"Add New Project"** → Import your GitHub repo
+3. **IMPORTANT** — Set Root Directory to **`frontend`**
+4. Framework: Vercel auto-detects **Create React App** ✓
+5. Go to **Environment Variables** and add:
+   ```
+   REACT_APP_BACKEND_URL = https://your-railway-app.up.railway.app
+   ```
+   (use the Railway URL from Step 2)
+6. Click **Deploy** → Done!
+
+---
+
+## Step 4 — Connect CORS
+
+After Vercel gives you your URL (e.g. `https://hamro-gng.vercel.app`):
+
+1. Go back to **Railway** → Variables
+2. Update `CORS_ORIGINS` to your Vercel URL:
+   ```
+   CORS_ORIGINS = https://hamro-gng.vercel.app
+   ```
+3. Railway auto-redeploys
+
+---
+
+## Step 5 — Custom Domain (Optional)
+
+- **Vercel**: Settings → Domains → Add `hamroauto.com.np`
+- **Railway**: Settings → Networking → Custom Domain
+
+---
+
+## Environment Variables Summary
+
+### Railway (Backend)
+| Variable | Required | Description |
+|---|---|---|
+| `MONGO_URL` | ✅ | MongoDB Atlas connection string |
+| `DB_NAME` | ✅ | `hamro_gng_auto` |
+| `JWT_SECRET` | ✅ | Random secret for auth tokens |
+| `EMERGENT_LLM_KEY` | ✅ | For AI features (Pricing, Chatbot, Festival) |
+| `CORS_ORIGINS` | ✅ | Your Vercel frontend URL |
+| `PORT` | ❌ | Set automatically by Railway |
+
+### Vercel (Frontend)
+| Variable | Required | Description |
+|---|---|---|
+| `REACT_APP_BACKEND_URL` | ✅ | Your Railway backend URL |
+
+---
+
+## Verify Deployment
+
+After deploying, test these:
+```
+# Health check
+curl https://your-railway-app.up.railway.app/api/health
+
+# Login
+curl -X POST https://your-railway-app.up.railway.app/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+```
+
+Default login: **admin / admin123** (change this in Settings after first login!)
+
+---
+
+## Troubleshooting
+
+| Issue | Fix |
+|---|---|
+| `CORS error` on frontend | Check `CORS_ORIGINS` in Railway matches your Vercel URL exactly |
+| `Cannot connect to DB` | Check MongoDB Atlas network access allows `0.0.0.0/0` |
+| `AI features not working` | Verify `EMERGENT_LLM_KEY` is set in Railway variables |
+| `Photos not persisting` | Add a Railway volume mounted at `/app/uploads` |
+| `Build failed on Railway` | Check Railway logs → usually a missing env var |
+| Login works but pages crash | Check `REACT_APP_BACKEND_URL` in Vercel has no trailing slash |
