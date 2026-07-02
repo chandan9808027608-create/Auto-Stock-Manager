@@ -19,8 +19,11 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+import certifi
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
+# Use certifi TLS only for remote Atlas connections, not local MongoDB
+_is_atlas = "mongodb+srv" in mongo_url or ("mongodb.net" in mongo_url)
+client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where()) if _is_atlas else AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 JWT_SECRET = os.environ.get('JWT_SECRET', 'hamro-gng-2024')
