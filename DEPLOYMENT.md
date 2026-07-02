@@ -1,5 +1,148 @@
 # Hamro G&G Auto OS — Deployment Guide
-## Vercel (Frontend) + Railway (Backend) + MongoDB Atlas
+## Vercel (Frontend) + Render (Backend) + MongoDB Atlas
+
+---
+
+## Overview
+
+| Service | What it hosts | Cost |
+|---|---|---|
+| **Vercel** | React frontend | Free |
+| **Render** | FastAPI backend + file uploads | Free (always-on from $7/mo) |
+| **MongoDB Atlas** | Database | Free (512 MB) |
+
+---
+
+## Step 1 — MongoDB Atlas (Database)
+
+1. Go to **[cloud.mongodb.com](https://cloud.mongodb.com)** → Create account
+2. Click **"Build a Cluster"** → Choose **Free (M0 Shared)**
+3. Select region closest to Nepal (Singapore `ap-southeast-1` recommended)
+4. **Connect** → **Drivers** → Copy the connection string
+5. Replace `<password>` with your DB user password
+6. Your `MONGO_URL` will look like:
+   ```
+   mongodb+srv://username:password@cluster0.abcde.mongodb.net/?retryWrites=true&w=majority
+   ```
+
+> **Important**: In Atlas → Network Access → Add IP Address → **"Allow Access from Anywhere"** (`0.0.0.0/0`)
+
+---
+
+## Step 2 — Render (Backend)
+
+1. Go to **[render.com](https://render.com)** → Login with GitHub
+2. Click **"New +"** → **"Web Service"**
+3. Connect your GitHub repo → Set **Root Directory** to `backend`
+4. Render auto-detects the `Dockerfile` ✓
+5. Under **Environment Variables**, add:
+
+   | Key | Value |
+   |---|---|
+   | `MONGO_URL` | Your Atlas connection string |
+   | `DB_NAME` | `hamro_gng_auto` |
+   | `JWT_SECRET` | Any long random string |
+   | `EMERGENT_LLM_KEY` | From Emergent Profile → Universal Key |
+   | `CORS_ORIGINS` | *(set after Step 3)* |
+
+6. Click **Create Web Service** → wait for build to finish
+7. Copy your Render URL: `https://hamro-gng-auto-backend.onrender.com`
+
+> **Free tier note:** Render free services spin down after 15 min of inactivity (cold start ~30s).
+> Upgrade to the $7/mo Starter plan for always-on uptime.
+
+---
+
+## Step 3 — Vercel (Frontend)
+
+1. Go to **[vercel.com](https://vercel.com)** → Login with GitHub
+2. Click **"Add New Project"** → Import your GitHub repo
+3. **IMPORTANT** — Set Root Directory to **`frontend`**
+4. Framework: Vercel auto-detects **Create React App** ✓
+5. Add Environment Variable:
+   ```
+   REACT_APP_BACKEND_URL = https://hamro-gng-auto-backend.onrender.com
+   ```
+   (use the Render URL from Step 2 — no trailing slash)
+6. Click **Deploy** → Done!
+
+---
+
+## Step 4 — Connect CORS
+
+After Vercel gives you your URL (e.g. `https://hamro-gng.vercel.app`):
+
+1. Go back to **Render** → Your service → **Environment**
+2. Update `CORS_ORIGINS` to your Vercel URL:
+   ```
+   CORS_ORIGINS = https://hamro-gng.vercel.app
+   ```
+3. Click **Save Changes** → Render auto-redeploys
+
+---
+
+## Step 5 — Persistent File Storage (for vehicle photos)
+
+Render free tier does **not** support persistent disk. Options:
+- **Paid plan ($7/mo):** Render dashboard → Your service → **Disks** → Add disk at `/app/uploads`
+- **Free alternative:** Use Cloudinary or AWS S3 for photo storage (requires code change)
+
+---
+
+## Step 6 — Custom Domain (Optional)
+
+- **Vercel**: Settings → Domains → Add `hamroauto.com.np`
+- **Render**: Settings → Custom Domains → Add domain
+
+---
+
+## Environment Variables Summary
+
+### Render (Backend)
+| Variable | Required | Description |
+|---|---|---|
+| `MONGO_URL` | ✅ | MongoDB Atlas connection string |
+| `DB_NAME` | ✅ | `hamro_gng_auto` |
+| `JWT_SECRET` | ✅ | Random secret for auth tokens |
+| `EMERGENT_LLM_KEY` | ✅ | For AI features (Pricing, Chatbot, Festival) |
+| `CORS_ORIGINS` | ✅ | Your Vercel frontend URL |
+
+### Vercel (Frontend)
+| Variable | Required | Description |
+|---|---|---|
+| `REACT_APP_BACKEND_URL` | ✅ | Your Render backend URL (no trailing slash) |
+
+---
+
+## Verify Deployment
+
+After deploying, test these:
+```bash
+# Health check
+curl https://your-app.onrender.com/api/health
+
+# Login
+curl -X POST https://your-app.onrender.com/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+```
+
+Default login: **admin / admin123** (change this after first login!)
+
+---
+
+## Troubleshooting
+
+| Issue | Fix |
+|---|---|
+| `CORS error` on frontend | Check `CORS_ORIGINS` in Render matches your Vercel URL exactly |
+| `Cannot connect to DB` | Check MongoDB Atlas network access allows `0.0.0.0/0` |
+| `AI features not working` | Verify `EMERGENT_LLM_KEY` is set in Render variables |
+| `Photos not loading after redeploy` | Add a Render disk at `/app/uploads` (paid plan) |
+| `Build failed on Render` | Check Render logs → usually a missing env var |
+| Login works but pages crash | Check `REACT_APP_BACKEND_URL` in Vercel has no trailing slash |
+| Slow first request | Normal on free tier (cold start) — upgrade to Starter for always-on |
+
 
 ---
 
