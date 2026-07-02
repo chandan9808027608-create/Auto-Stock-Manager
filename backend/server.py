@@ -20,10 +20,15 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 import certifi
+from pymongo.server_api import ServerApi
 mongo_url = os.environ['MONGO_URL']
-# Use certifi TLS only for remote Atlas connections, not local MongoDB
-_is_atlas = "mongodb+srv" in mongo_url or ("mongodb.net" in mongo_url)
-client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where()) if _is_atlas else AsyncIOMotorClient(mongo_url)
+# Use certifi + ServerApi('1') for Atlas — MongoDB's own recommended pattern
+_is_atlas = "mongodb+srv" in mongo_url or "mongodb.net" in mongo_url
+client = AsyncIOMotorClient(
+    mongo_url,
+    server_api=ServerApi('1'),
+    tlsCAFile=certifi.where()
+) if _is_atlas else AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 JWT_SECRET = os.environ.get('JWT_SECRET', 'hamro-gng-2024')
