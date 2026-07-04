@@ -95,6 +95,13 @@ Build "Hamro G&G Auto OS", an advanced AI-powered automobile dealership manageme
 - certifi + dnspython for production DB connectivity
 - DO NOT modify MONGO_URL logic or TLS CA configuration
 
+### Sales Module (Jul 2026)
+- **Record Sale**: link vehicle (available only) + optional customer → auto-marks vehicle as sold
+- **Extra Expenses**: preset fees (Registration Transfer, Insurance Transfer, Road Tax, Bluebook Copy, Notary, Delivery) with editable amounts + unlimited custom expenses
+- **Grand Total**: live-calculated (sale price + all expenses)
+- Payment methods: Cash, Bank Transfer, EMI, Cheque, Digital Wallet
+- Backend: GET/POST /api/sales, GET /api/sales/summary, DELETE /api/sales/{sid}
+
 ## Default Credentials
 - Username: admin
 - Password: admin123
