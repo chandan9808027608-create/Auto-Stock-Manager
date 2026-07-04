@@ -19,6 +19,7 @@ import Finance from "./pages/Finance";
 import Marketing from "./pages/Marketing";
 import EMI from "./pages/EMI";
 import SpareParts from "./pages/SpareParts";
+import Sales from "./pages/Sales";
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
@@ -48,6 +49,7 @@ function AppRoutes() {
         <Route path="marketing" element={<Marketing />} />
         <Route path="emi" element={<EMI />} />
         <Route path="spare-parts" element={<SpareParts />} />
+        <Route path="sales" element={<Sales />} />
         <Route path="ai" element={<AIAssistant />} />
         <Route path="settings" element={<Settings />} />
       </Route>

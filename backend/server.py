@@ -243,6 +243,15 @@ class PartStockOut(BaseModel):
     customer_id: Optional[str] = None
     notes: Optional[str] = None
 
+class SaleCreate(BaseModel):
+    vehicle_id: str
+    customer_id: Optional[str] = None
+    sale_price: float
+    extra_expenses: List[dict] = []  # [{name: str, amount: float}]
+    payment_method: str = "Cash"
+    sale_date: Optional[str] = None
+    notes: Optional[str] = None
+
 class CustomerCreate(BaseModel):
     name: str; contact_number: str
     address: Optional[str] = None
@@ -545,6 +554,82 @@ async def delete_customer(cid: str, cu: dict = Depends(get_current_user)):
     r = await db.customers.delete_one({"id": cid})
     if r.deleted_count == 0: raise HTTPException(404, "Not found")
     return {"message": "Deleted"}
+
+# ── SALES ─────────────────────────────────────────────────────────────
+@api_router.get("/sales")
+async def get_sales(cu: dict = Depends(get_current_user)):
+    sales = await db.sales.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    for s in sales:
+        v = await db.vehicles.find_one({"id": s.get("vehicle_id")}, {"_id": 0, "brand": 1, "model": 1, "year": 1, "registration_number": 1})
+        if v: s["vehicle_info"] = f"{v['brand']} {v['model']} {v.get('year','')}" + (f" ({v['registration_number']})" if v.get("registration_number") else "")
+        c = await db.customers.find_one({"id": s.get("customer_id")}, {"_id": 0, "name": 1, "contact_number": 1}) if s.get("customer_id") else None
+        s["customer_name"] = c["name"] if c else "Walk-in Customer"
+        s["customer_contact"] = c.get("contact_number") if c else None
+    return sales
+
+@api_router.post("/sales")
+async def create_sale(sale: SaleCreate, cu: dict = Depends(get_current_user)):
+    v = await db.vehicles.find_one({"id": sale.vehicle_id}, {"_id": 0})
+    if not v: raise HTTPException(404, "Vehicle not found")
+    if v.get("status") != "available": raise HTTPException(400, f"Vehicle is already {v.get('status')}")
+    expenses_total = sum(float(e.get("amount", 0)) for e in sale.extra_expenses)
+    total_amount = sale.sale_price + expenses_total
+    sale_date = sale.sale_date or datetime.now(timezone.utc).date().isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "vehicle_id": sale.vehicle_id,
+        "customer_id": sale.customer_id,
+        "sale_price": sale.sale_price,
+        "extra_expenses": sale.extra_expenses,
+        "expenses_total": expenses_total,
+        "total_amount": total_amount,
+        "payment_method": sale.payment_method,
+        "sale_date": sale_date,
+        "notes": sale.notes,
+        "created_by": cu.get("username"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.sales.insert_one(doc)
+    doc.pop("_id", None)
+    # Mark vehicle as sold
+    await db.vehicles.update_one({"id": sale.vehicle_id}, {"$set": {
+        "status": "sold",
+        "selling_price": sale.sale_price,
+        "sold_date": sale_date,
+        "customer_id": sale.customer_id,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    # Update customer purchase history
+    if sale.customer_id:
+        await db.customers.update_one({"id": sale.customer_id}, {"$set": {"last_purchase_date": sale_date}})
+    return doc
+
+@api_router.get("/sales/summary")
+async def get_sales_summary(cu: dict = Depends(get_current_user)):
+    sales = await db.sales.find({}, {"_id": 0}).to_list(1000)
+    total_revenue = sum(s.get("total_amount", 0) for s in sales)
+    this_month = datetime.now(timezone.utc).strftime("%Y-%m")
+    monthly = [s for s in sales if s.get("sale_date", "").startswith(this_month)]
+    avg = total_revenue / len(sales) if sales else 0
+    return {"total_sales": len(sales), "total_revenue": total_revenue, "this_month_sales": len(monthly), "this_month_revenue": sum(s.get("total_amount", 0) for s in monthly), "avg_sale_price": round(avg, 2)}
+
+@api_router.get("/sales/{sid}")
+async def get_sale(sid: str, cu: dict = Depends(get_current_user)):
+    s = await db.sales.find_one({"id": sid}, {"_id": 0})
+    if not s: raise HTTPException(404, "Not found")
+    return s
+
+@api_router.delete("/sales/{sid}")
+async def delete_sale(sid: str, cu: dict = Depends(get_current_user)):
+    s = await db.sales.find_one({"id": sid}, {"_id": 0})
+    if not s: raise HTTPException(404, "Not found")
+    await db.sales.delete_one({"id": sid})
+    # Restore vehicle to available
+    await db.vehicles.update_one({"id": s["vehicle_id"]}, {"$set": {
+        "status": "available", "sold_date": None, "customer_id": None,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    return {"message": "Sale deleted, vehicle restored to available"}
 
 # ── TEAM ──────────────────────────────────────────────────────────────
 @api_router.get("/team")

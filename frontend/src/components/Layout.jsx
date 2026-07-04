@@ -4,12 +4,13 @@ import { useAuth } from "../context/AuthContext";
 import {
   LayoutDashboard, Bike, Wrench, Users, UsersRound,
   BarChart3, Handshake, Sparkles, Settings, LogOut, Menu, X, Bell,
-  Store, Wallet, Megaphone, CreditCard, Boxes
+  Store, Wallet, Megaphone, CreditCard, Boxes, ShoppingBag
 } from "lucide-react";
 
 const navItems = [
   { path: "/",             label: "Dashboard",    icon: LayoutDashboard },
   { path: "/inventory",    label: "Inventory",    icon: Bike },
+  { path: "/sales",        label: "Sales",        icon: ShoppingBag },
   { path: "/spare-parts",  label: "Spare Parts",  icon: Boxes },
   { path: "/vendors",      label: "Vendors",      icon: Store },
   { path: "/jobs",         label: "Job Cards",    icon: Wrench },
