@@ -227,11 +227,21 @@ class JobCardCreate(BaseModel):
     vehicle_id: str; work_description: str
     mechanic_id: Optional[str] = None; mechanic_name: str
     estimated_cost: float; notes: Optional[str] = None
+    parts: List[dict] = []
 
 class JobCardUpdate(BaseModel):
     work_description: Optional[str] = None; mechanic_name: Optional[str] = None
     estimated_cost: Optional[float] = None; actual_cost: Optional[float] = None
     status: Optional[str] = None; notes: Optional[str] = None
+    parts: Optional[List[dict]] = None
+
+class PartStockOut(BaseModel):
+    quantity: int
+    reason: str  # Sale | Used in Job Card | Damaged | Return
+    date: Optional[str] = None
+    job_id: Optional[str] = None
+    customer_id: Optional[str] = None
+    notes: Optional[str] = None
 
 class CustomerCreate(BaseModel):
     name: str; contact_number: str
