@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Search, Trash2, TrendingUp, DollarSign, Calendar, ShoppingBag, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Search, Trash2, TrendingUp, DollarSign, Calendar, ShoppingBag, X, ChevronDown, ChevronUp, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR } from "../utils/helpers";
@@ -45,6 +45,11 @@ export default function Sales() {
   const [vehicles, setVehicles] = useState([]);
   const [customers, setCustomers] = useState([]);
 
+  // Inline add-customer form
+  const [showAddCust, setShowAddCust] = useState(false);
+  const [newCust, setNewCust] = useState({ name: "", contact_number: "", address: "" });
+  const [addingCust, setAddingCust] = useState(false);
+
   // Extra expenses state
   const [checkedPresets, setCheckedPresets] = useState({});      // { "Registration Transfer Fee": true }
   const [presetAmounts, setPresetAmounts] = useState({});        // { "Registration Transfer Fee": 2000 }
@@ -69,11 +74,27 @@ export default function Sales() {
     setPresetAmounts(Object.fromEntries(PRESET_EXPENSES.map(e => [e.name, e.amount])));
     setCustomExpenses([]);
     setNewExpName(""); setNewExpAmt("");
+    setShowAddCust(false);
+    setNewCust({ name: "", contact_number: "", address: "" });
     setShowModal(true);
     try {
       const [v, c] = await Promise.all([api.get("/vehicles?status=available"), api.get("/customers")]);
       setVehicles(v.data); setCustomers(c.data);
     } catch { toast.error("Failed to load vehicles/customers"); }
+  };
+
+  const saveNewCustomer = async () => {
+    if (!newCust.name || !newCust.contact_number) { toast.error("Name and phone are required"); return; }
+    setAddingCust(true);
+    try {
+      const r = await api.post("/customers", newCust);
+      setCustomers(prev => [r.data, ...prev]);
+      setForm(f => ({ ...f, customer_id: r.data.id }));
+      setShowAddCust(false);
+      setNewCust({ name: "", contact_number: "", address: "" });
+      toast.success("Customer added!");
+    } catch (err) { toast.error(err.response?.data?.detail || "Failed to add customer"); }
+    finally { setAddingCust(false); }
   };
 
   // Compute total extra expenses
@@ -253,12 +274,31 @@ export default function Sales() {
 
               {/* Customer */}
               <Field label="Customer">
-                <select value={form.customer_id} onChange={e => setForm({...form, customer_id: e.target.value})} className={sel} data-testid="sale-customer-select">
-                  <option value="">Walk-in / No customer record</option>
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} — {c.contact_number}</option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <select value={form.customer_id} onChange={e => setForm({...form, customer_id: e.target.value})} className={sel} data-testid="sale-customer-select">
+                    <option value="">Walk-in / No customer record</option>
+                    {customers.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} — {c.contact_number}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={() => setShowAddCust(!showAddCust)} title="Add new customer" data-testid="add-customer-inline-btn" className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border transition-colors ${showAddCust ? "bg-blue-600 text-white border-blue-600" : "border-slate-200 text-slate-500 hover:bg-slate-50"}`}>
+                    <UserPlus size={15} />
+                  </button>
+                </div>
+                {showAddCust && (
+                  <div className="mt-2 p-3 bg-blue-50 border border-blue-100 rounded-xl space-y-2" data-testid="add-customer-form">
+                    <p className="text-xs font-semibold text-blue-700">New Customer</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={newCust.name} onChange={e => setNewCust({...newCust, name: e.target.value})} placeholder="Full Name *" className="h-8 px-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" data-testid="new-cust-name" />
+                      <input value={newCust.contact_number} onChange={e => setNewCust({...newCust, contact_number: e.target.value})} placeholder="Phone *" className="h-8 px-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" data-testid="new-cust-phone" />
+                    </div>
+                    <input value={newCust.address} onChange={e => setNewCust({...newCust, address: e.target.value})} placeholder="Address (optional)" className="w-full h-8 px-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white" />
+                    <div className="flex gap-2 justify-end">
+                      <button type="button" onClick={() => setShowAddCust(false)} className="px-3 h-7 text-xs text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
+                      <button type="button" onClick={saveNewCustomer} disabled={addingCust} data-testid="save-new-cust-btn" className="px-3 h-7 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 font-medium">{addingCust ? "Saving..." : "Create & Select"}</button>
+                    </div>
+                  </div>
+                )}
               </Field>
 
               {/* Sale Price + Payment */}

@@ -842,10 +842,15 @@ async def finance_summary(cu: dict = Depends(get_current_user)):
     inventory_value = sum(
         [await _vehicle_investment(v["id"], v) for v in avail]
     )
-    # Revenue & COGS from sold vehicles
-    sold = await db.vehicles.find({"status": "sold"}, {"_id": 0}).to_list(1000)
-    total_revenue = sum(v.get("selling_price") or 0 for v in sold)
-    total_cogs = sum([await _vehicle_investment(v["id"], v) for v in sold])
+    # Revenue & COGS from Sales table (single source of truth)
+    sales_records = await db.sales.find({}, {"_id": 0}).to_list(1000)
+    total_revenue = sum(s.get("total_amount", 0) for s in sales_records)
+    sold_vehicle_ids = [s["vehicle_id"] for s in sales_records]
+    total_cogs = 0
+    for vid in sold_vehicle_ids:
+        v = await db.vehicles.find_one({"id": vid}, {"_id": 0})
+        if v:
+            total_cogs += await _vehicle_investment(vid, v)
     gross_profit = total_revenue - total_cogs
 
     # Vendor payables
@@ -869,7 +874,7 @@ async def finance_summary(cu: dict = Depends(get_current_user)):
         "emi_receivables": emi_receivables,
         "total_partner_capital": total_capital,
         "vehicles_in_stock": len(avail),
-        "vehicles_sold": len(sold),
+        "vehicles_sold": len(sales_records),
     }
 
 # ── MARKETING AI ─────────────────────────────────────────────────────
@@ -922,7 +927,6 @@ Price in NPR. Include: 'Call/WhatsApp: 9841XXXXXX | Visit: Hamro G&G Auto, Kathm
 async def dashboard_stats(cu: dict = Depends(get_current_user)):
     total = await db.vehicles.count_documents({})
     available = await db.vehicles.count_documents({"status": "available"})
-    sold = await db.vehicles.count_documents({"status": "sold"})
     reserved = await db.vehicles.count_documents({"status": "reserved"})
     in_repair = await db.vehicles.count_documents({"status": "in_repair"})
 
@@ -930,9 +934,15 @@ async def dashboard_stats(cu: dict = Depends(get_current_user)):
     locked_capital = sum([await _vehicle_investment(v["id"], v) for v in avail_v])
     aging = _aging_counts(avail_v)
 
-    sold_v = await db.vehicles.find({"status": "sold"}, {"_id": 0}).to_list(1000)
-    sold_profits = [(v.get("selling_price") or 0) - (await _vehicle_investment(v["id"], v)) for v in sold_v]
-    total_profit = sum(sold_profits)
+    # Use Sales table as single source of truth for sold count & profit
+    sales_records = await db.sales.find({}, {"_id": 0}).to_list(1000)
+    sold = len(sales_records)
+    total_profit = 0
+    for s in sales_records:
+        v = await db.vehicles.find_one({"id": s["vehicle_id"]}, {"_id": 0})
+        if v:
+            inv = await _vehicle_investment(s["vehicle_id"], v)
+            total_profit += s.get("total_amount", 0) - inv
 
     vendors = await db.vendors.find({}, {"_id": 0}).to_list(100)
     total_vendor_due = sum([await _vendor_payable(v["id"]) for v in vendors])
@@ -1011,16 +1021,17 @@ async def accounting_summary(start_date: str, end_date: str, cu: dict = Depends(
         exps = await db.expenses.find({"vehicle_id": v["id"]}, {"_id": 0}).to_list(200)
         total_cost += v.get("purchase_price", 0) + v.get("accessories_cost", 0) + sum(e["amount"] for e in exps)
 
-    # Vehicles sold in period
-    sold = await db.vehicles.find(
-        {"status": "sold", "sold_date": {"$gte": start_date, "$lte": end_date}}, {"_id": 0}
+    # Sales in period — use Sales table as source of truth
+    sales_in_period = await db.sales.find(
+        {"sale_date": {"$gte": start_date, "$lte": end_date}}, {"_id": 0}
     ).to_list(5000)
-    total_sales, total_investment_sold, sold_count = 0, 0, len(sold)
-    for v in sold:
-        exps = await db.expenses.find({"vehicle_id": v["id"]}, {"_id": 0}).to_list(200)
-        inv = v.get("purchase_price", 0) + v.get("accessories_cost", 0) + sum(e["amount"] for e in exps)
-        total_investment_sold += inv
-        total_sales += v.get("selling_price") or 0
+    total_sales, total_investment_sold, sold_count = 0, 0, len(sales_in_period)
+    for s in sales_in_period:
+        total_sales += s.get("total_amount", 0)
+        v = await db.vehicles.find_one({"id": s["vehicle_id"]}, {"_id": 0})
+        if v:
+            exps = await db.expenses.find({"vehicle_id": s["vehicle_id"]}, {"_id": 0}).to_list(200)
+            total_investment_sold += v.get("purchase_price", 0) + v.get("accessories_cost", 0) + sum(e["amount"] for e in exps)
 
     net_profit = total_sales - total_investment_sold
     return {
