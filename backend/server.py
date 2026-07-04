@@ -472,6 +472,23 @@ async def create_job(job: JobCardCreate, cu: dict = Depends(get_current_user)):
         jc["vehicle_year"] = v.get("year"); jc["registration_number"] = v.get("registration_number")
     await db.job_cards.insert_one(jc)
     jc.pop("_id", None)
+    # Deduct parts from spare parts inventory and log transactions
+    for part in jc.get("parts", []):
+        part_id = part.get("part_id")
+        qty = int(part.get("quantity", 0))
+        if part_id and qty > 0:
+            pp = await db.spare_parts.find_one({"id": part_id}, {"_id": 0, "quantity": 1, "name": 1})
+            if pp:
+                new_qty = max(0, pp.get("quantity", 0) - qty)
+                await db.spare_parts.update_one({"id": part_id}, {"$set": {"quantity": new_qty}})
+                txn = {
+                    "id": str(uuid.uuid4()), "part_id": part_id, "part_name": pp.get("name"),
+                    "type": "out", "quantity": qty, "reason": "Used in Job Card",
+                    "date": datetime.now(timezone.utc).isoformat()[:10],
+                    "job_id": jc["id"], "notes": f"Job {jc['job_number']}",
+                    "created_by": cu.get("username"), "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+                await db.part_transactions.insert_one(txn)
     return jc
 
 @api_router.put("/jobs/{jid}")
@@ -1260,6 +1277,26 @@ async def adjust_spare_stock(pid: str, req: dict, cu: dict = Depends(get_current
     await db.spare_parts.update_one({"id": pid}, {"$set": {"quantity": new_qty}})
     return {"quantity": new_qty}
 
+@api_router.post("/spare-parts/{pid}/stock-out")
+async def stock_out_part(pid: str, req: PartStockOut, cu: dict = Depends(get_current_user)):
+    p = await db.spare_parts.find_one({"id": pid}, {"_id": 0})
+    if not p: raise HTTPException(404, "Not found")
+    if req.quantity <= 0: raise HTTPException(400, "Quantity must be positive")
+    current_qty = p.get("quantity", 0)
+    if req.quantity > current_qty: raise HTTPException(400, f"Insufficient stock. Available: {current_qty}")
+    new_qty = current_qty - req.quantity
+    await db.spare_parts.update_one({"id": pid}, {"$set": {"quantity": new_qty}})
+    txn = {
+        "id": str(uuid.uuid4()), "part_id": pid, "part_name": p.get("name"),
+        "type": "out", "quantity": req.quantity, "reason": req.reason,
+        "date": req.date or datetime.now(timezone.utc).isoformat()[:10],
+        "job_id": req.job_id, "notes": req.notes,
+        "created_by": cu.get("username"), "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.part_transactions.insert_one(txn)
+    txn.pop("_id", None)
+    return {"quantity": new_qty, "transaction": txn}
+
 @api_router.get("/spare-parts/summary")
 async def spare_parts_summary(cu: dict = Depends(get_current_user)):
     parts = await db.spare_parts.find({}, {"_id": 0}).to_list(1000)
@@ -1267,6 +1304,11 @@ async def spare_parts_summary(cu: dict = Depends(get_current_user)):
     low_stock = [p for p in parts if p.get("quantity", 0) <= p.get("min_stock_alert", 2)]
     categories = list({p.get("category", "General") for p in parts})
     return {"total_parts": len(parts), "total_value": total_value, "low_stock_count": len(low_stock), "categories": categories}
+
+@api_router.get("/spare-parts/{pid}/transactions")
+async def get_part_transactions(pid: str, cu: dict = Depends(get_current_user)):
+    txns = await db.part_transactions.find({"part_id": pid}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return txns
 
 # ══════════════════════════════════════════════════════════════════════
 # ── WEBSITE SYNC (hamroauto.com.np) ───────────────────────────────────

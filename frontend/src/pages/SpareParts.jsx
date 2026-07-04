@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Search, AlertTriangle, Package, Trash2, Edit, TrendingUp, Minus } from "lucide-react";
+import { Plus, Search, AlertTriangle, Package, Trash2, Edit, Minus, ShoppingCart, History, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR } from "../utils/helpers";
@@ -9,6 +9,7 @@ const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:ou
 const sel = `${inp} bg-white`;
 
 const CATEGORIES = ["General", "Engine", "Brakes", "Electrical", "Tyres", "Body", "Oil & Fluids", "Filters", "Chain & Sprocket", "Lights", "Other"];
+const REASONS = ["Sale", "Used in Repair", "Damaged", "Return to Supplier", "Internal Use"];
 
 const Field = ({ label, required, children }) => (
   <div>
@@ -18,6 +19,7 @@ const Field = ({ label, required, children }) => (
 );
 
 const EMPTY = { name: "", category: "General", brand_compatibility: "", part_number: "", quantity: 0, unit_cost: "", selling_price: "", supplier: "", min_stock_alert: 2, location: "", notes: "" };
+const EMPTY_USE = { quantity: 1, reason: "Sale", notes: "" };
 
 export default function SpareParts() {
   const [parts, setParts] = useState([]);
@@ -31,7 +33,17 @@ export default function SpareParts() {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
 
-  const fetch = useCallback(async () => {
+  // Use/Sell Part modal
+  const [showUseModal, setShowUseModal] = useState(false);
+  const [usePart, setUsePart] = useState(null);
+  const [useForm, setUseForm] = useState(EMPTY_USE);
+  const [useSaving, setUseSaving] = useState(false);
+
+  // Transaction log
+  const [expandedPart, setExpandedPart] = useState(null);
+  const [txns, setTxns] = useState({});
+
+  const fetchAll = useCallback(async () => {
     try {
       const [p, s] = await Promise.all([api.get("/spare-parts"), api.get("/spare-parts/summary")]);
       setParts(p.data); setSummary(s.data);
@@ -39,7 +51,7 @@ export default function SpareParts() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const filtered = parts.filter(p => {
     if (catFilter !== "all" && p.category !== catFilter) return false;
@@ -59,20 +71,54 @@ export default function SpareParts() {
       const payload = { ...form, quantity: Number(form.quantity) || 0, unit_cost: Number(form.unit_cost) || 0, selling_price: form.selling_price ? Number(form.selling_price) : null, min_stock_alert: Number(form.min_stock_alert) || 2 };
       if (editId) { await api.put(`/spare-parts/${editId}`, payload); toast.success("Updated!"); }
       else { await api.post("/spare-parts", payload); toast.success("Part added!"); }
-      setShowModal(false); fetch();
+      setShowModal(false); fetchAll();
     } catch (err) { toast.error(err.response?.data?.detail || "Error"); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this part?")) return;
-    try { await api.delete(`/spare-parts/${id}`); toast.success("Deleted"); fetch(); }
+    try { await api.delete(`/spare-parts/${id}`); toast.success("Deleted"); fetchAll(); }
     catch { toast.error("Failed to delete"); }
   };
 
   const adjustStock = async (id, delta) => {
-    try { const r = await api.post(`/spare-parts/${id}/adjust-stock`, { delta }); setParts(prev => prev.map(p => p.id === id ? { ...p, quantity: r.data.quantity, low_stock: r.data.quantity <= p.min_stock_alert } : p)); }
-    catch { toast.error("Failed to update stock"); }
+    try {
+      const r = await api.post(`/spare-parts/${id}/adjust-stock`, { delta });
+      setParts(prev => prev.map(p => p.id === id ? { ...p, quantity: r.data.quantity, low_stock: r.data.quantity <= p.min_stock_alert } : p));
+    } catch { toast.error("Failed to update stock"); }
+  };
+
+  const openUsePart = (p) => { setUsePart(p); setUseForm(EMPTY_USE); setShowUseModal(true); };
+
+  const handleStockOut = async (e) => {
+    e.preventDefault();
+    const qty = Number(useForm.quantity);
+    if (!qty || qty <= 0) { toast.error("Enter a valid quantity"); return; }
+    if (qty > usePart.quantity) { toast.error(`Only ${usePart.quantity} in stock`); return; }
+    setUseSaving(true);
+    try {
+      await api.post(`/spare-parts/${usePart.id}/stock-out`, { quantity: qty, reason: useForm.reason, notes: useForm.notes });
+      toast.success(`${qty} unit(s) marked as "${useForm.reason}"`);
+      setShowUseModal(false);
+      fetchAll();
+      if (expandedPart === usePart.id) {
+        const r = await api.get(`/spare-parts/${usePart.id}/transactions`);
+        setTxns(prev => ({ ...prev, [usePart.id]: r.data }));
+      }
+    } catch (err) { toast.error(err.response?.data?.detail || "Error"); }
+    finally { setUseSaving(false); }
+  };
+
+  const toggleTxn = async (pid) => {
+    if (expandedPart === pid) { setExpandedPart(null); return; }
+    setExpandedPart(pid);
+    if (!txns[pid]) {
+      try {
+        const r = await api.get(`/spare-parts/${pid}/transactions`);
+        setTxns(prev => ({ ...prev, [pid]: r.data }));
+      } catch { toast.error("Failed to load history"); }
+    }
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full" /></div>;
@@ -143,36 +189,74 @@ export default function SpareParts() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {filtered.map(p => (
-                  <tr key={p.id} data-testid="part-row" className={`transition-colors ${p.low_stock ? "bg-red-50/40" : "hover:bg-slate-50"}`}>
-                    <td className="px-4 py-3">
-                      <div className="font-semibold text-slate-900 text-sm flex items-center gap-2">
-                        {p.name}
-                        {p.low_stock && <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-bold">Low</span>}
-                      </div>
-                      {p.brand_compatibility && <div className="text-xs text-slate-400 mt-0.5">{p.brand_compatibility}</div>}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">{p.category}</td>
-                    <td className="px-4 py-3 text-xs font-mono text-slate-500">{p.part_number || "—"}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <button onClick={() => adjustStock(p.id, -1)} className="w-6 h-6 rounded-md bg-slate-100 hover:bg-red-100 flex items-center justify-center transition-colors"><Minus size={11} /></button>
-                        <span className={`text-sm font-bold w-7 text-center ${p.low_stock ? "text-red-600" : "text-slate-900"}`}>{p.quantity}</span>
-                        <button onClick={() => adjustStock(p.id, 1)} className="w-6 h-6 rounded-md bg-slate-100 hover:bg-green-100 flex items-center justify-center transition-colors"><Plus size={11} /></button>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-700 whitespace-nowrap">{formatNPR(p.unit_cost)}</td>
-                    <td className="px-4 py-3 text-sm whitespace-nowrap">{p.selling_price ? <span className="text-green-700 font-medium">{formatNPR(p.selling_price)}</span> : "—"}</td>
-                    <td className="px-4 py-3 text-sm font-medium text-slate-800 whitespace-nowrap">{formatNPR(p.total_value)}</td>
-                    <td className="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">{p.supplier || "—"}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => openEdit(p)} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors" data-testid="edit-part-btn"><Edit size={14} className="text-slate-500" /></button>
-                        <button onClick={() => handleDelete(p.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" data-testid="delete-part-btn"><Trash2 size={14} className="text-red-400" /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.flatMap(p => {
+                  const rows = [];
+                  rows.push(
+                    <tr key={p.id} data-testid="part-row" className={`transition-colors ${p.low_stock ? "bg-red-50/40" : "hover:bg-slate-50"}`}>
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-slate-900 text-sm flex items-center gap-2">
+                          {p.name}
+                          {p.low_stock && <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-bold">Low</span>}
+                        </div>
+                        {p.brand_compatibility && <div className="text-xs text-slate-400 mt-0.5">{p.brand_compatibility}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">{p.category}</td>
+                      <td className="px-4 py-3 text-xs font-mono text-slate-500">{p.part_number || "—"}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => adjustStock(p.id, -1)} className="w-6 h-6 rounded-md bg-slate-100 hover:bg-red-100 flex items-center justify-center transition-colors"><Minus size={11} /></button>
+                          <span className={`text-sm font-bold w-7 text-center ${p.low_stock ? "text-red-600" : "text-slate-900"}`}>{p.quantity}</span>
+                          <button onClick={() => adjustStock(p.id, 1)} className="w-6 h-6 rounded-md bg-slate-100 hover:bg-green-100 flex items-center justify-center transition-colors"><Plus size={11} /></button>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-700 whitespace-nowrap">{formatNPR(p.unit_cost)}</td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">{p.selling_price ? <span className="text-green-700 font-medium">{formatNPR(p.selling_price)}</span> : "—"}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-slate-800 whitespace-nowrap">{formatNPR(p.total_value)}</td>
+                      <td className="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">{p.supplier || "—"}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => openUsePart(p)} title="Use / Sell Part" data-testid="use-part-btn" className="p-1.5 hover:bg-orange-50 rounded-lg transition-colors">
+                            <ShoppingCart size={14} className="text-orange-500" />
+                          </button>
+                          <button onClick={() => toggleTxn(p.id)} title="View History" data-testid="txn-history-btn" className={`p-1.5 rounded-lg transition-colors ${expandedPart === p.id ? "bg-blue-100" : "hover:bg-slate-100"}`}>
+                            {expandedPart === p.id ? <ChevronUp size={14} className="text-blue-600" /> : <History size={14} className="text-slate-500" />}
+                          </button>
+                          <button onClick={() => openEdit(p)} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors" data-testid="edit-part-btn"><Edit size={14} className="text-slate-500" /></button>
+                          <button onClick={() => handleDelete(p.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" data-testid="delete-part-btn"><Trash2 size={14} className="text-red-400" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                  if (expandedPart === p.id) {
+                    rows.push(
+                      <tr key={`${p.id}-txn`} className="bg-slate-50">
+                        <td colSpan={9} className="px-6 py-3">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-2">
+                            <History size={12} /> Usage History
+                          </div>
+                          {!txns[p.id] ? (
+                            <div className="text-xs text-slate-400">Loading...</div>
+                          ) : txns[p.id].length === 0 ? (
+                            <div className="text-xs text-slate-400">No usage recorded yet.</div>
+                          ) : (
+                            <div className="space-y-1.5 max-h-44 overflow-y-auto">
+                              {txns[p.id].map(t => (
+                                <div key={t.id} className="flex items-center gap-4 text-xs text-slate-600 bg-white rounded-lg px-3 py-2 border border-slate-100">
+                                  <span className="font-bold text-red-600 w-8 shrink-0">-{t.quantity}</span>
+                                  <span className="font-medium text-slate-800">{t.reason}</span>
+                                  <span className="text-slate-400">{t.date?.slice(0, 10)}</span>
+                                  {t.notes && <span className="text-slate-400 italic truncate">{t.notes}</span>}
+                                  <span className="ml-auto text-slate-400 shrink-0">by {t.created_by}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return rows;
+                })}
               </tbody>
             </table>
           </div>
@@ -204,6 +288,38 @@ export default function SpareParts() {
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => { setShowModal(false); setForm(EMPTY); }} className="flex-1 h-10 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
                 <button type="submit" disabled={saving} data-testid="save-part-btn" className="flex-1 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 active:scale-95 transition-all">{saving ? "Saving..." : editId ? "Update" : "Add Part"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Use / Sell Part Modal */}
+      {showUseModal && usePart && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Use / Sell Part</h2>
+                <p className="text-xs text-slate-500 mt-0.5">{usePart.name} — <span className="font-semibold text-slate-700">{usePart.quantity} in stock</span></p>
+              </div>
+              <button onClick={() => setShowUseModal(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
+            </div>
+            <form onSubmit={handleStockOut} className="p-5 space-y-4">
+              <Field label="Quantity to Deduct" required>
+                <input type="text" inputMode="numeric" value={useForm.quantity} onChange={e => setUseForm({...useForm, quantity: e.target.value})} placeholder="1" className={inp} data-testid="use-qty-input" />
+              </Field>
+              <Field label="Reason" required>
+                <select value={useForm.reason} onChange={e => setUseForm({...useForm, reason: e.target.value})} className={sel} data-testid="use-reason-select">
+                  {REASONS.map(r => <option key={r}>{r}</option>)}
+                </select>
+              </Field>
+              <Field label="Notes">
+                <input value={useForm.notes} onChange={e => setUseForm({...useForm, notes: e.target.value})} placeholder="Optional notes" className={inp} />
+              </Field>
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={() => setShowUseModal(false)} className="flex-1 h-10 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
+                <button type="submit" disabled={useSaving} data-testid="confirm-use-btn" className="flex-1 h-10 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold disabled:opacity-60 active:scale-95 transition-all">{useSaving ? "Saving..." : "Confirm"}</button>
               </div>
             </form>
           </div>

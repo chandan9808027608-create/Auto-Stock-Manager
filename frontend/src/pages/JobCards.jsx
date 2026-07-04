@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Search, ChevronDown } from "lucide-react";
+import { Plus, Search, Wrench, X, Package } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getJobStyle } from "../utils/helpers";
 
 const STATUSES = ["all", "pending", "in_progress", "completed"];
+const EMPTY_FORM = { vehicle_id: "", work_description: "", mechanic_name: "", estimated_cost: "", notes: "" };
 
 export default function JobCards() {
   const [jobs, setJobs] = useState([]);
@@ -13,10 +14,15 @@ export default function JobCards() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ vehicle_id: "", work_description: "", mechanic_name: "", estimated_cost: "", notes: "" });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [vehicles, setVehicles] = useState([]);
+  const [spareParts, setSpareParts] = useState([]);
   const [saving, setSaving] = useState(false);
   const [updating, setUpdating] = useState(null);
+
+  // Parts linked to the new job
+  const [jobParts, setJobParts] = useState([]);
+  const [partSearch, setPartSearch] = useState("");
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -26,29 +32,70 @@ export default function JobCards() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchJobs(); api.get("/vehicles?status=available").then(r => setVehicles(r.data)).catch(() => {}); }, [fetchJobs]);
+  useEffect(() => {
+    fetchJobs();
+    api.get("/vehicles?status=available").then(r => setVehicles(r.data)).catch(() => {});
+    api.get("/spare-parts").then(r => setSpareParts(r.data)).catch(() => {});
+  }, [fetchJobs]);
 
   useEffect(() => {
     let result = [...jobs];
     if (statusFilter !== "all") result = result.filter(j => j.status === statusFilter);
     if (search) {
       const q = search.toLowerCase();
-      result = result.filter(j => j.mechanic_name?.toLowerCase().includes(q) || j.job_number?.toLowerCase().includes(q) || j.work_description?.toLowerCase().includes(q) || j.vehicle_brand?.toLowerCase().includes(q) || j.vehicle_model?.toLowerCase().includes(q));
+      result = result.filter(j =>
+        j.mechanic_name?.toLowerCase().includes(q) ||
+        j.job_number?.toLowerCase().includes(q) ||
+        j.work_description?.toLowerCase().includes(q) ||
+        j.vehicle_brand?.toLowerCase().includes(q) ||
+        j.vehicle_model?.toLowerCase().includes(q)
+      );
     }
     setFiltered(result);
   }, [jobs, statusFilter, search]);
+
+  const partsTotalCost = jobParts.reduce((s, p) => s + p.quantity * p.unit_cost, 0);
+
+  const filteredSpareParts = spareParts.filter(p =>
+    partSearch.length > 0 &&
+    p.name.toLowerCase().includes(partSearch.toLowerCase()) &&
+    !jobParts.find(jp => jp.part_id === p.id)
+  );
+
+  const addPartToJob = (part) => {
+    if (part.quantity <= 0) { toast.error(`${part.name} is out of stock`); return; }
+    setJobParts(prev => [...prev, { part_id: part.id, part_name: part.name, quantity: 1, unit_cost: part.unit_cost || 0, available_qty: part.quantity }]);
+    setPartSearch("");
+  };
+
+  const updatePartQty = (part_id, val) => {
+    const num = parseInt(val) || 1;
+    const part = jobParts.find(p => p.part_id === part_id);
+    if (num > part.available_qty) { toast.error(`Only ${part.available_qty} in stock`); return; }
+    setJobParts(prev => prev.map(p => p.part_id === part_id ? { ...p, quantity: Math.max(1, num) } : p));
+  };
+
+  const removePartFromJob = (part_id) => setJobParts(prev => prev.filter(p => p.part_id !== part_id));
+
+  const openModal = () => { setForm(EMPTY_FORM); setJobParts([]); setPartSearch(""); setShowModal(true); };
 
   const createJob = async (e) => {
     e.preventDefault();
     if (!form.vehicle_id || !form.work_description || !form.mechanic_name || !form.estimated_cost) { toast.error("Fill all required fields"); return; }
     setSaving(true);
     try {
-      await api.post("/jobs", { ...form, estimated_cost: Number(form.estimated_cost) });
+      await api.post("/jobs", {
+        ...form,
+        estimated_cost: Number(form.estimated_cost),
+        parts: jobParts.map(p => ({ part_id: p.part_id, part_name: p.part_name, quantity: p.quantity, unit_cost: p.unit_cost })),
+      });
       toast.success("Job card created!");
       setShowModal(false);
-      setForm({ vehicle_id: "", work_description: "", mechanic_name: "", estimated_cost: "", notes: "" });
       fetchJobs();
-    } catch (err) { toast.error(err.response?.data?.detail || "Failed"); } finally { setSaving(false); }
+      // Refresh spare parts quantities after deduction
+      api.get("/spare-parts").then(r => setSpareParts(r.data)).catch(() => {});
+    } catch (err) { toast.error(err.response?.data?.detail || "Failed"); }
+    finally { setSaving(false); }
   };
 
   const updateStatus = async (jobId, newStatus, actualCost = null) => {
@@ -83,7 +130,7 @@ export default function JobCards() {
           <h1 className="text-2xl font-bold text-slate-900">Job Cards</h1>
           <p className="text-sm text-slate-500">{filtered.length} records</p>
         </div>
-        <button onClick={() => setShowModal(true)} data-testid="create-job-button" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-all active:scale-95 shadow-sm">
+        <button onClick={openModal} data-testid="create-job-button" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-all active:scale-95 shadow-sm">
           <Plus size={16} /> New Job Card
         </button>
       </div>
@@ -95,7 +142,7 @@ export default function JobCards() {
           { label: "In Progress", count: stats.in_progress, bg: "bg-blue-50 border-blue-100", text: "text-blue-800" },
           { label: "Completed", count: stats.completed, bg: "bg-green-50 border-green-100", text: "text-green-800" },
         ].map(s => (
-          <div key={s.label} className={`${s.bg} border rounded-xl p-4 text-center`} data-testid={`job-stat-${s.label.toLowerCase().replace(" ","-")}`}>
+          <div key={s.label} className={`${s.bg} border rounded-xl p-4 text-center`} data-testid={`job-stat-${s.label.toLowerCase().replace(" ", "-")}`}>
             <div className={`text-2xl font-bold ${s.text}`} style={{ fontFamily: "Manrope" }}>{s.count}</div>
             <div className={`text-xs font-medium ${s.text} mt-0.5`}>{s.label}</div>
           </div>
@@ -117,7 +164,7 @@ export default function JobCards() {
         </div>
       </div>
 
-      {/* Cards */}
+      {/* Job Cards */}
       {loading ? (
         <div className="flex items-center justify-center h-48"><div className="animate-spin w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full" /></div>
       ) : filtered.length === 0 ? (
@@ -127,6 +174,7 @@ export default function JobCards() {
           {filtered.map(job => {
             const js = getJobStyle(job.status);
             const overBudget = job.actual_cost && job.actual_cost > job.estimated_cost;
+            const partsTotal = job.parts?.reduce((s, p) => s + p.quantity * p.unit_cost, 0) || 0;
             return (
               <div key={job.id} data-testid="job-card" className={`bg-white rounded-xl border ${overBudget ? "border-red-200" : "border-slate-200"} shadow-sm p-5 hover:shadow-md transition-shadow`}>
                 <div className="flex items-start justify-between mb-3">
@@ -145,13 +193,31 @@ export default function JobCards() {
                 <div className="grid grid-cols-2 gap-2 text-xs text-slate-500 mb-3">
                   <div>Mechanic: <span className="font-medium text-slate-700">{job.mechanic_name}</span></div>
                   <div>Est: <span className="font-medium text-slate-700">{formatNPR(job.estimated_cost)}</span></div>
-                  {job.actual_cost && <div className={overBudget ? "text-red-600 font-medium" : ""}>Actual: <span className="font-medium">{formatNPR(job.actual_cost)}</span></div>}
+                  {job.actual_cost != null && <div className={overBudget ? "text-red-600 font-medium" : ""}>Actual: <span className="font-medium">{formatNPR(job.actual_cost)}</span></div>}
                   <div>Date: <span className="font-medium text-slate-700">{job.created_at?.slice(0, 10)}</span></div>
                 </div>
 
-                {overBudget && <div className="text-xs text-red-600 font-medium mb-3">⚠ Over budget by {formatNPR(job.actual_cost - job.estimated_cost)}</div>}
+                {/* Parts used in this job */}
+                {job.parts?.length > 0 && (
+                  <div className="mb-3 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1.5">
+                      <Package size={11} /> Parts Used
+                    </div>
+                    {job.parts.map((p, i) => (
+                      <div key={i} className="flex justify-between text-xs text-slate-600 py-0.5">
+                        <span>{p.part_name} × {p.quantity}</span>
+                        <span className="font-medium">{formatNPR(p.quantity * p.unit_cost)}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between text-xs font-bold text-slate-800 border-t border-slate-200 mt-1 pt-1">
+                      <span>Parts Total</span>
+                      <span className="text-blue-700">{formatNPR(partsTotal)}</span>
+                    </div>
+                  </div>
+                )}
 
-                {/* Actions */}
+                {overBudget && <div className="text-xs text-red-600 font-medium mb-3">Over budget by {formatNPR(job.actual_cost - job.estimated_cost)}</div>}
+
                 <div className="flex items-center gap-2 flex-wrap">
                   {job.status === "pending" && (
                     <button onClick={() => updateStatus(job.id, "in_progress")} disabled={updating === job.id} className="px-2.5 py-1.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-60">
@@ -163,7 +229,7 @@ export default function JobCards() {
                       Mark Complete
                     </button>
                   )}
-                  {job.status === "completed" && <span className="text-xs text-green-600 font-medium">Completed {job.completed_at?.slice(0,10)}</span>}
+                  {job.status === "completed" && <span className="text-xs text-green-600 font-medium">Completed {job.completed_at?.slice(0, 10)}</span>}
                   <button onClick={() => deleteJob(job.id)} className="ml-auto text-xs text-red-400 hover:text-red-600 transition-colors px-2 py-1">Delete</button>
                 </div>
               </div>
@@ -172,10 +238,10 @@ export default function JobCards() {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Create Job Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900">Create Job Card</h2>
               <button onClick={() => setShowModal(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
@@ -190,7 +256,7 @@ export default function JobCards() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Work Description <span className="text-red-500">*</span></label>
-                <textarea value={form.work_description} onChange={e => setForm({...form, work_description: e.target.value})} rows={3} placeholder="Describe work..." className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                <textarea value={form.work_description} onChange={e => setForm({...form, work_description: e.target.value})} rows={3} placeholder="Describe work to be done..." className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Mechanic Name <span className="text-red-500">*</span></label>
@@ -200,13 +266,74 @@ export default function JobCards() {
                 <label className="block text-xs font-medium text-slate-600 mb-1">Estimated Cost (NPR) <span className="text-red-500">*</span></label>
                 <input type="number" value={form.estimated_cost} onChange={e => setForm({...form, estimated_cost: e.target.value})} placeholder="e.g. 3000" className={inp} />
               </div>
+
+              {/* Spare Parts Section */}
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 mb-2">
+                  <Wrench size={12} /> Add Spare Parts <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <div className="relative">
+                  <input
+                    value={partSearch}
+                    onChange={e => setPartSearch(e.target.value)}
+                    placeholder="Search parts from inventory..."
+                    className={inp}
+                    data-testid="part-search-input"
+                    autoComplete="off"
+                  />
+                  {filteredSpareParts.length > 0 && (
+                    <div className="absolute left-0 right-0 top-10 z-10 bg-white border border-slate-200 rounded-lg shadow-lg max-h-40 overflow-y-auto" data-testid="parts-dropdown">
+                      {filteredSpareParts.map(p => (
+                        <button type="button" key={p.id} onClick={() => addPartToJob(p)} className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 flex justify-between items-center border-b border-slate-50 last:border-0">
+                          <div>
+                            <span className="font-medium text-slate-800">{p.name}</span>
+                            {p.brand_compatibility && <span className="text-slate-400 ml-1.5">({p.brand_compatibility})</span>}
+                          </div>
+                          <div className="text-right shrink-0 ml-2">
+                            <div className={`font-semibold ${p.quantity <= (p.min_stock_alert || 2) ? "text-red-600" : "text-green-600"}`}>{p.quantity} left</div>
+                            <div className="text-slate-400">{formatNPR(p.unit_cost)}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {jobParts.length > 0 && (
+                  <div className="mt-2 bg-slate-50 rounded-lg p-2 space-y-1.5" data-testid="job-parts-list">
+                    {jobParts.map(p => (
+                      <div key={p.part_id} className="flex items-center gap-2 bg-white rounded-lg px-2 py-1.5 border border-slate-100 text-xs">
+                        <Package size={11} className="text-slate-400 shrink-0" />
+                        <span className="flex-1 font-medium text-slate-700 truncate">{p.part_name}</span>
+                        <span className="text-slate-400 shrink-0">Qty:</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={p.quantity}
+                          onChange={e => updatePartQty(p.part_id, e.target.value)}
+                          className="w-12 h-6 text-center text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <span className="text-slate-700 font-medium w-20 text-right shrink-0">{formatNPR(p.quantity * p.unit_cost)}</span>
+                        <button type="button" onClick={() => removePartFromJob(p.part_id)} className="text-red-400 hover:text-red-600 shrink-0">
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                    <div className="flex justify-between text-xs font-bold text-slate-800 border-t border-slate-200 pt-1.5 px-1">
+                      <span>Parts Total</span>
+                      <span className="text-blue-700">{formatNPR(partsTotalCost)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
                 <input value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} placeholder="Additional notes" className={inp} />
               </div>
               <div className="flex gap-3">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 h-10 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
-                <button type="submit" disabled={saving} className="flex-1 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60">{saving ? "Creating..." : "Create"}</button>
+                <button type="submit" disabled={saving} data-testid="create-job-submit" className="flex-1 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60">{saving ? "Creating..." : "Create"}</button>
               </div>
             </form>
           </div>
