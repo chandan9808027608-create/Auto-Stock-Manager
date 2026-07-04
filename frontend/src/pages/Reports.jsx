@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from "recharts";
 import api from "../utils/api";
 import { formatNPR } from "../utils/helpers";
@@ -7,6 +8,7 @@ const AGING_COLORS = { fresh: "#22c55e", normal: "#eab308", slow: "#f97316", dea
 const MONTH_COLORS = ["#2563EB", "#7C3AED", "#059669", "#DC2626", "#D97706", "#0891B2"];
 
 export default function Reports() {
+  const navigate = useNavigate();
   const [dashboard, setDashboard] = useState(null);
   const [inventory, setInventory] = useState(null);
   const [financial, setFinancial] = useState(null);
@@ -64,18 +66,25 @@ export default function Reports() {
         <div className="space-y-5">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: "Total Vehicles", val: dashboard.total_vehicles, color: "text-slate-900" },
-              { label: "Available", val: dashboard.available, color: "text-blue-600" },
-              { label: "Sold", val: dashboard.sold, color: "text-green-600" },
-              { label: "Locked Capital", val: formatNPR(dashboard.locked_capital), color: "text-indigo-600" },
-              { label: "Realized Profit", val: formatNPR(dashboard.total_realized_profit), color: "text-emerald-600" },
-              { label: "Dead Stock", val: dashboard.dead_stock_count, color: "text-red-600" },
-              { label: "Slow Moving", val: dashboard.slow_moving_count, color: "text-orange-600" },
-              { label: "Customers", val: dashboard.total_customers, color: "text-purple-600" },
-            ].map(({ label, val, color }) => (
-              <div key={label} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4" data-testid="report-kpi-card">
+              { label: "Total Vehicles", val: dashboard.total_vehicles, color: "text-slate-900", aging: null },
+              { label: "Available", val: dashboard.available, color: "text-blue-600", aging: null },
+              { label: "Sold", val: dashboard.sold, color: "text-green-600", aging: null },
+              { label: "Locked Capital", val: formatNPR(dashboard.locked_capital), color: "text-indigo-600", aging: null },
+              { label: "Realized Profit", val: formatNPR(dashboard.total_realized_profit), color: "text-emerald-600", aging: null },
+              { label: "Dead Stock", val: dashboard.dead_stock_count, color: "text-red-600", aging: "dead" },
+              { label: "Slow Moving", val: dashboard.slow_moving_count, color: "text-orange-600", aging: "slow" },
+              { label: "Customers", val: dashboard.total_customers, color: "text-purple-600", aging: null },
+            ].map(({ label, val, color, aging }) => (
+              <div
+                key={label}
+                className={`bg-white rounded-xl border border-slate-200 shadow-sm p-4 ${aging ? "cursor-pointer hover:shadow-md hover:border-blue-300 transition-all" : ""}`}
+                data-testid="report-kpi-card"
+                onClick={() => aging && navigate(`/inventory?aging=${aging}`)}
+                title={aging ? `Click to view ${label} vehicles in Inventory` : undefined}
+              >
                 <div className="text-xs text-slate-500 mb-1">{label}</div>
                 <div className={`text-xl font-bold ${color}`} style={{ fontFamily: "Manrope" }}>{val}</div>
+                {aging && <div className="text-xs text-blue-500 mt-1">View in Inventory →</div>}
               </div>
             ))}
           </div>
@@ -125,7 +134,7 @@ export default function Reports() {
           </div>
 
           {/* Slow / Dead Stock */}
-          {(inventory.dead_stock?.length > 0 || inventory.slow_moving?.length > 0) && (
+          {(inventory.dead_stock?.length > 0 || inventory.slow_moving?.length > 0) ? (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
               <h2 className="text-base font-bold text-slate-900 mb-4" style={{ fontFamily: "Manrope" }}>Action Required Stock</h2>
               <div className="overflow-x-auto">
@@ -139,7 +148,13 @@ export default function Reports() {
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {[...inventory.dead_stock, ...inventory.slow_moving].map((v) => (
-                      <tr key={v.id} className="table-row-hover">
+                      <tr
+                        key={v.id}
+                        className="table-row-hover cursor-pointer hover:bg-slate-50 transition-colors"
+                        onClick={() => navigate(`/inventory/${v.id}`)}
+                        data-testid={`dead-stock-row-${v.id}`}
+                        title="Click to view vehicle detail"
+                      >
                         <td className="px-3 py-3 font-medium text-slate-900">{v.brand} {v.model} {v.year}</td>
                         <td className="px-3 py-3 text-slate-600">{v.days} days</td>
                         <td className="px-3 py-3">
@@ -154,6 +169,11 @@ export default function Reports() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          ) : inventory && (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 text-center text-slate-500" data-testid="no-dead-stock-msg">
+              <p className="font-medium text-green-700">No dead or slow moving stock!</p>
+              <p className="text-sm mt-1">All available vehicles are within healthy stock age.</p>
             </div>
           )}
         </div>

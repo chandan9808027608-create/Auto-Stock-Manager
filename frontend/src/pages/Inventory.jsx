@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import { Plus, Search, Eye, Trash2, Filter } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Plus, Search, Eye, Trash2, Filter, X } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getAgingStyle, getStatusStyle, BRANDS } from "../utils/helpers";
@@ -18,12 +18,14 @@ const EMPTY = {
 
 export default function Inventory() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [vehicles, setVehicles] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [brandFilter, setBrandFilter] = useState("all");
+  const [agingFilter, setAgingFilter] = useState(searchParams.get("aging") || "");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
@@ -40,7 +42,20 @@ export default function Inventory() {
 
   useEffect(() => {
     let result = [...vehicles];
-    if (statusFilter !== "all") result = result.filter(v => v.status === statusFilter);
+
+    // Aging filter (from URL ?aging=dead|slow) — only count available vehicles
+    // to stay consistent with dashboard dead_stock_count which counts available-only
+    if (agingFilter) {
+      result = result.filter(v => v.status === "available" && v.aging?.category === agingFilter);
+      if (result.length === 0) {
+        console.log(`[Inventory] aging filter "${agingFilter}" returned 0 results. Total vehicles: ${vehicles.length}`);
+      } else {
+        console.log(`[Inventory] aging filter "${agingFilter}" matched ${result.length} available vehicles`);
+      }
+    } else {
+      if (statusFilter !== "all") result = result.filter(v => v.status === statusFilter);
+    }
+
     if (brandFilter !== "all") result = result.filter(v => v.brand === brandFilter);
     if (search) {
       const q = search.toLowerCase();
@@ -50,7 +65,7 @@ export default function Inventory() {
       );
     }
     setFiltered(result);
-  }, [vehicles, search, statusFilter, brandFilter]);
+  }, [vehicles, search, statusFilter, brandFilter, agingFilter]);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -102,6 +117,22 @@ export default function Inventory() {
         </button>
       </div>
 
+      {/* Active Aging Filter Banner */}
+      {agingFilter && (
+        <div className={`flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium border ${agingFilter === "dead" ? "bg-red-50 border-red-200 text-red-700" : "bg-orange-50 border-orange-200 text-orange-700"}`} data-testid="aging-filter-banner">
+          <span>
+            Showing: <strong>{agingFilter === "dead" ? "Dead Stock (60+ days)" : "Slow Moving (46–60 days)"}</strong> — available vehicles only
+          </span>
+          <button
+            data-testid="clear-aging-filter"
+            onClick={() => { setAgingFilter(""); setSearchParams({}); }}
+            className="flex items-center gap-1 ml-3 hover:opacity-70 transition-opacity"
+          >
+            <X size={14} /> Clear filter
+          </button>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-48">
@@ -144,9 +175,28 @@ export default function Inventory() {
             <div className="animate-spin w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-slate-500">
-            <p className="font-medium">No vehicles found</p>
-            <p className="text-sm mt-1">Add your first vehicle to get started</p>
+          <div className="flex flex-col items-center justify-center h-48 text-slate-500" data-testid="empty-state">
+            <p className="font-medium">
+              {agingFilter
+                ? `No ${agingFilter === "dead" ? "dead stock (60+ days)" : "slow moving (46–60 days)"} vehicles found`
+                : "No vehicles found"}
+            </p>
+            <p className="text-sm mt-1">
+              {agingFilter
+                ? "All available vehicles are within healthy stock age — great!"
+                : search || statusFilter !== "all" || brandFilter !== "all"
+                  ? "Try adjusting your filters"
+                  : "Add your first vehicle to get started"}
+            </p>
+            {agingFilter && (
+              <button
+                onClick={() => { setAgingFilter(""); setSearchParams({}); }}
+                className="mt-3 text-sm text-blue-600 hover:underline"
+                data-testid="empty-clear-filter"
+              >
+                View all vehicles
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
