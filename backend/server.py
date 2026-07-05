@@ -751,7 +751,7 @@ async def search_vendors(q: str = "", cu: dict = Depends(get_current_user)):
     if q:
         q_lower = q.lower()
         vendors = [v for v in vendors if q_lower in v.get("name", "").lower()]
-    return vendors[:8]
+    return vendors[:8] if q else vendors
 
 @api_router.get("/vendors/{vid}/payments")
 async def get_vendor_payments(vid: str, cu: dict = Depends(get_current_user)):
@@ -1311,7 +1311,8 @@ class SparePartCreate(BaseModel):
     quantity: int = 0
     unit_cost: float = 0
     selling_price: Optional[float] = None
-    supplier: Optional[str] = None
+    vendor_id: Optional[str] = None
+    supplier: Optional[str] = None  # kept for backward compat
     min_stock_alert: int = 2
     location: Optional[str] = None
     notes: Optional[str] = None
@@ -1324,6 +1325,7 @@ class SparePartUpdate(BaseModel):
     quantity: Optional[int] = None
     unit_cost: Optional[float] = None
     selling_price: Optional[float] = None
+    vendor_id: Optional[str] = None
     supplier: Optional[str] = None
     min_stock_alert: Optional[int] = None
     location: Optional[str] = None
@@ -1335,10 +1337,17 @@ async def get_spare_parts(category: Optional[str] = None, low_stock: Optional[bo
     if category: query["category"] = category
     parts = await db.spare_parts.find(query, {"_id": 0}).to_list(1000)
     if low_stock: parts = [p for p in parts if p.get("quantity", 0) <= p.get("min_stock_alert", 2)]
+    # Batch-fetch vendor names
+    vendor_ids = {p["vendor_id"] for p in parts if p.get("vendor_id")}
+    vendor_map = {}
+    if vendor_ids:
+        vdocs = await db.vendors.find({"id": {"$in": list(vendor_ids)}}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
+        vendor_map = {v["id"]: v["name"] for v in vdocs}
     for p in parts:
         p["total_value"] = p.get("quantity", 0) * p.get("unit_cost", 0)
         p["low_stock"] = p.get("quantity", 0) <= p.get("min_stock_alert", 2)
         p["margin"] = round(((p.get("selling_price", 0) - p.get("unit_cost", 0)) / p.get("unit_cost", 1)) * 100, 1) if p.get("selling_price") and p.get("unit_cost") else None
+        p["vendor_name"] = vendor_map.get(p.get("vendor_id", ""))
     return parts
 
 @api_router.post("/spare-parts")
