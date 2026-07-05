@@ -75,7 +75,12 @@ Build "Hamro G&G Auto OS", an advanced AI-powered automobile dealership manageme
 - Website sync simulation
 - JWT auth via sessionStorage
 
-### Spare Parts — Stock-Out & Audit Trail (Jul 2026)
+### Spare Parts — Vendor Combobox (Jul 2026)
+- "Supplier" field replaced with searchable combobox bound to Vendors database
+- Stores `vendor_id` (UUID reference) instead of plain text; `GET /spare-parts` batch-enriches with `vendor_name`
+- Legacy `supplier` text-only records display correctly as fallback
+- Inline "Add New Vendor" button at bottom of dropdown creates a vendor without leaving the modal and auto-selects it
+- `GET /vendors/search` returns all vendors when no query is provided (was capped at 8)
 - **Use/Sell Part modal**: orange cart icon per row → deducts qty, logs reason (Sale/Used in Repair/Damaged/Return/Internal Use) + notes
 - **Transaction history**: blue history icon → expandable inline row with full audit log (qty, reason, date, user)
 - **Job Card Parts integration**: Create job card → search spare parts inventory → add parts with qty → auto-deducts stock on save → parts cost shown on job card
