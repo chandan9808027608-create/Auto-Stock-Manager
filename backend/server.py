@@ -276,6 +276,7 @@ class VendorCreate(BaseModel):
     name: str; phone: str
     address: Optional[str] = None
     notes: Optional[str] = None
+    vendor_type: Optional[str] = "both"
 
 class VendorPaymentCreate(BaseModel):
     vendor_id: str; amount: float
@@ -715,12 +716,17 @@ async def get_vendors(cu: dict = Depends(get_current_user)):
     vendors = await db.vendors.find({}, {"_id": 0}).to_list(200)
     for v in vendors:
         vehicles = await db.vehicles.find({"vendor_id": v["id"]}, {"_id": 0}).to_list(200)
-        total_owed = sum(vh.get("purchase_price", 0) for vh in vehicles)
+        parts = await db.spare_parts.find({"vendor_id": v["id"]}, {"_id": 0}).to_list(1000)
+        vehicle_owed = sum(vh.get("purchase_price", 0) for vh in vehicles)
+        parts_owed = sum(p.get("quantity", 0) * p.get("unit_cost", 0) for p in parts)
+        total_owed = vehicle_owed + parts_owed
         payments = await db.vendor_payments.find({"vendor_id": v["id"]}, {"_id": 0}).to_list(500)
         total_paid = sum(p["amount"] for p in payments)
         v["total_purchased"] = total_owed; v["total_paid"] = total_paid
         v["remaining_due"] = max(0, total_owed - total_paid)
         v["vehicle_count"] = len(vehicles)
+        v["parts_count"] = len(parts)
+        v["parts_purchased"] = parts_owed
         v["overdue"] = v["remaining_due"] > 0
     return vendors
 
@@ -757,11 +763,21 @@ async def search_vendors(q: str = "", cu: dict = Depends(get_current_user)):
 async def get_vendor_payments(vid: str, cu: dict = Depends(get_current_user)):
     payments = await db.vendor_payments.find({"vendor_id": vid}, {"_id": 0}).sort("payment_date", -1).to_list(500)
     vehicles = await db.vehicles.find({"vendor_id": vid}, {"_id": 0}).to_list(200)
-    total_owed = sum(v.get("purchase_price", 0) for v in vehicles)
+    parts = await db.spare_parts.find({"vendor_id": vid}, {"_id": 0}).to_list(1000)
+    vehicle_owed = sum(v.get("purchase_price", 0) for v in vehicles)
+    parts_owed = sum(p.get("quantity", 0) * p.get("unit_cost", 0) for p in parts)
+    total_owed = vehicle_owed + parts_owed
     total_paid = sum(p["amount"] for p in payments)
+    bills = {}
+    for p in parts:
+        key = p.get("bill_no") or "No Bill No."
+        b = bills.setdefault(key, {"bill_no": key, "entry_date": p.get("entry_date") or (p.get("created_at", "")[:10]), "items": [], "total": 0})
+        b["items"].append(p)
+        b["total"] += p.get("quantity", 0) * p.get("unit_cost", 0)
+    parts_bills = sorted(bills.values(), key=lambda b: b["entry_date"] or "", reverse=True)
     return {"payments": payments, "total_paid": total_paid,
             "total_owed": total_owed, "remaining_due": max(0, total_owed - total_paid),
-            "vehicles": vehicles}
+            "vehicles": vehicles, "parts_bills": parts_bills}
 
 @api_router.post("/vendor-payments")
 async def create_vendor_payment(payment: VendorPaymentCreate, cu: dict = Depends(get_current_user)):
@@ -1312,6 +1328,8 @@ class SparePartCreate(BaseModel):
     unit_cost: float = 0
     selling_price: Optional[float] = None
     vendor_id: Optional[str] = None
+    bill_no: Optional[str] = None
+    entry_date: Optional[str] = None
     supplier: Optional[str] = None  # kept for backward compat
     min_stock_alert: int = 2
     location: Optional[str] = None
@@ -1326,6 +1344,8 @@ class SparePartUpdate(BaseModel):
     unit_cost: Optional[float] = None
     selling_price: Optional[float] = None
     vendor_id: Optional[str] = None
+    bill_no: Optional[str] = None
+    entry_date: Optional[str] = None
     supplier: Optional[str] = None
     min_stock_alert: Optional[int] = None
     location: Optional[str] = None
@@ -1353,6 +1373,7 @@ async def get_spare_parts(category: Optional[str] = None, low_stock: Optional[bo
 @api_router.post("/spare-parts")
 async def create_spare_part(part: SparePartCreate, cu: dict = Depends(get_current_user)):
     doc = {"id": str(uuid.uuid4()), **part.dict(), "created_at": datetime.now(timezone.utc).isoformat()}
+    if not doc.get("entry_date"): doc["entry_date"] = datetime.now(timezone.utc).date().isoformat()
     await db.spare_parts.insert_one(doc)
     doc.pop("_id", None)
     return doc
