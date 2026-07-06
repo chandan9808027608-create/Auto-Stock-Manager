@@ -4,8 +4,6 @@ import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR } from "../utils/helpers";
 
-const PAID_BY_OPTIONS = ["Cash", "Bank Transfer"];
-
 const PRESET_EXPENSES = [
   { name: "Registration Transfer Fee", amount: 2000 },
   { name: "Insurance Transfer Fee", amount: 1500 },
@@ -29,7 +27,7 @@ const Field = ({ label, required, children }) => (
 
 const EMPTY_FORM = {
   vehicle_id: "", customer_id: "", sale_price: "",
-  payment_method: "Cash", paid_amount: "", due_date: "", sale_date: "", notes: "",
+  payment_method: "Cash", paid_cash: "", paid_bank: "", due_date: "", sale_date: "", notes: "",
 };
 
 export default function Sales() {
@@ -85,14 +83,13 @@ export default function Sales() {
 
   const openEditModal = async (sale) => {
     setEditingId(sale.id);
-    const paidCash = Number(sale.paid_cash) || 0;
-    const paidBank = Number(sale.paid_bank) || 0;
     setForm({
       vehicle_id: sale.vehicle_id,
       customer_id: sale.customer_id || "",
       sale_price: sale.sale_price,
-      payment_method: paidBank > paidCash ? "Bank Transfer" : "Cash",
-      paid_amount: (paidCash + paidBank) || "",
+      payment_method: sale.payment_method,
+      paid_cash: sale.paid_cash || "",
+      paid_bank: sale.paid_bank || "",
       due_date: sale.due_date || "",
       sale_date: sale.sale_date || "",
       notes: sale.notes || "",
@@ -130,7 +127,7 @@ export default function Sales() {
   const extraExpenses = expenseItems;
   const expensesTotal = extraExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
   const grandTotal = (Number(form.sale_price) || 0) + expensesTotal;
-  const amountPaid = Number(form.paid_amount) || 0;
+  const amountPaid = (Number(form.paid_cash) || 0) + (Number(form.paid_bank) || 0);
   const amountDue = Math.max(Number((grandTotal - amountPaid).toFixed(2)), 0);
 
   const availablePresets = PRESET_EXPENSES.filter(p => !expenseItems.some(e => e.name === p.name));
@@ -157,15 +154,14 @@ export default function Sales() {
     if (!form.vehicle_id || !form.sale_price) { toast.error("Vehicle and Sale Price are required"); return; }
     setSaving(true);
     try {
-      const paidAmount = Number(form.paid_amount) || 0;
       const payload = {
         vehicle_id: form.vehicle_id,
         customer_id: form.customer_id || null,
         sale_price: Number(form.sale_price),
         extra_expenses: extraExpenses.map(e => ({ name: e.name, amount: Number(e.amount) || 0 })),
-        payment_method: paidAmount > 0 ? form.payment_method : "Due",
-        paid_cash: form.payment_method === "Cash" ? paidAmount : 0,
-        paid_bank: form.payment_method === "Bank Transfer" ? paidAmount : 0,
+        payment_method: (Number(form.paid_bank) > 0 && Number(form.paid_cash) > 0) ? "Cash + Bank Transfer" : (Number(form.paid_bank) > 0 ? "Bank Transfer" : (Number(form.paid_cash) > 0 ? "Cash" : "Due")),
+        paid_cash: Number(form.paid_cash) || 0,
+        paid_bank: Number(form.paid_bank) || 0,
         due_date: form.due_date || undefined,
         sale_date: form.sale_date || undefined,
         notes: form.notes,
@@ -397,21 +393,18 @@ export default function Sales() {
                 )}
               </Field>
 
-              {/* Sale Price + Paid By */}
+              {/* Sale Price + Payment */}
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Sale Price (NPR)" required>
                   <input type="text" inputMode="numeric" value={form.sale_price} onChange={e => setForm({...form, sale_price: e.target.value})} placeholder="e.g. 185000" className={inp} data-testid="sale-price-input" />
                 </Field>
-                <Field label="Paid By">
-                  <select value={form.payment_method} onChange={e => setForm({...form, payment_method: e.target.value})} className={sel} data-testid="paid-by-select">
-                    {PAID_BY_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
+                <Field label="Paid by Cash (NPR)">
+                  <input type="text" inputMode="numeric" value={form.paid_cash} onChange={e => setForm({...form, paid_cash: e.target.value})} placeholder="0" className={inp} data-testid="paid-cash-input" />
+                </Field>
+                <Field label="Paid by Bank Transfer (NPR)">
+                  <input type="text" inputMode="numeric" value={form.paid_bank} onChange={e => setForm({...form, paid_bank: e.target.value})} placeholder="0" className={inp} data-testid="paid-bank-input" />
                 </Field>
               </div>
-
-              <Field label="Amount Paid (NPR)">
-                <input type="text" inputMode="numeric" value={form.paid_amount} onChange={e => setForm({...form, paid_amount: e.target.value})} placeholder="0" className={inp} data-testid="paid-amount-input" />
-              </Field>
 
               {/* Extra Expenses */}
               <div className="border border-slate-200 rounded-xl overflow-hidden">
