@@ -252,6 +252,18 @@ class SaleCreate(BaseModel):
     sale_date: Optional[str] = None
     notes: Optional[str] = None
 
+class SaleUpdate(BaseModel):
+    vehicle_id: str
+    customer_id: Optional[str] = None
+    sale_price: float
+    extra_expenses: List[dict] = []  # [{name: str, amount: float}]
+    payment_method: str = "Cash"
+    paid_cash: float = 0
+    paid_bank: float = 0
+    due_date: Optional[str] = None
+    sale_date: Optional[str] = None
+    notes: Optional[str] = None
+
 class SalePaymentCreate(BaseModel):
     amount: float
     method: str = "Cash"
@@ -635,8 +647,55 @@ async def get_sale(sid: str, cu: dict = Depends(get_current_user)):
     if not s: raise HTTPException(404, "Not found")
     return s
 
+@api_router.put("/sales/{sid}")
+async def update_sale(sid: str, sale: SaleUpdate, cu: dict = Depends(get_current_user)):
+    if cu.get("role") != "admin":
+        raise HTTPException(403, "Only admin accounts can edit sales records")
+    existing = await db.sales.find_one({"id": sid}, {"_id": 0})
+    if not existing: raise HTTPException(404, "Not found")
+    v = await db.vehicles.find_one({"id": sale.vehicle_id}, {"_id": 0})
+    if not v: raise HTTPException(404, "Vehicle not found")
+    expenses_total = sum(float(e.get("amount", 0)) for e in sale.extra_expenses)
+    total_amount = sale.sale_price + expenses_total
+    paid_total = (sale.paid_cash or 0) + (sale.paid_bank or 0)
+    due_amount = max(round(total_amount - paid_total, 2), 0)
+    payment_status = "Paid" if due_amount <= 0 else ("Partial" if paid_total > 0 else "Unpaid")
+    sale_date = sale.sale_date or existing.get("sale_date")
+    update_doc = {
+        "vehicle_id": sale.vehicle_id,
+        "customer_id": sale.customer_id,
+        "sale_price": sale.sale_price,
+        "extra_expenses": sale.extra_expenses,
+        "expenses_total": expenses_total,
+        "total_amount": total_amount,
+        "payment_method": sale.payment_method,
+        "paid_cash": sale.paid_cash or 0,
+        "paid_bank": sale.paid_bank or 0,
+        "due_amount": due_amount,
+        "due_date": sale.due_date,
+        "payment_status": payment_status,
+        "sale_date": sale_date,
+        "notes": sale.notes,
+        "updated_by": cu.get("username"),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.sales.update_one({"id": sid}, {"$set": update_doc})
+    # Keep vehicle record in sync (price/date/customer may have changed)
+    await db.vehicles.update_one({"id": sale.vehicle_id}, {"$set": {
+        "selling_price": sale.sale_price,
+        "sold_date": sale_date,
+        "customer_id": sale.customer_id,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+    if sale.customer_id:
+        await db.customers.update_one({"id": sale.customer_id}, {"$set": {"last_purchase_date": sale_date}})
+    updated = await db.sales.find_one({"id": sid}, {"_id": 0})
+    return updated
+
 @api_router.delete("/sales/{sid}")
 async def delete_sale(sid: str, cu: dict = Depends(get_current_user)):
+    if cu.get("role") != "admin":
+        raise HTTPException(403, "Only admin accounts can delete sales records")
     s = await db.sales.find_one({"id": sid}, {"_id": 0})
     if not s: raise HTTPException(404, "Not found")
     await db.sales.delete_one({"id": sid})

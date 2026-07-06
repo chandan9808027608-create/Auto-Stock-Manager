@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Search, Trash2, TrendingUp, DollarSign, Calendar, ShoppingBag, X, ChevronDown, ChevronUp, UserPlus, AlertTriangle } from "lucide-react";
+import { Plus, Search, Trash2, Pencil, TrendingUp, DollarSign, Calendar, ShoppingBag, X, ChevronDown, ChevronUp, UserPlus, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR } from "../utils/helpers";
+import { useAuth } from "../context/AuthContext";
 
 const PRESET_EXPENSES = [
   { name: "Registration Transfer Fee", amount: 2000 },
@@ -31,6 +32,8 @@ const EMPTY_FORM = {
 };
 
 export default function Sales() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [sales, setSales] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -325,9 +328,18 @@ export default function Sales() {
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">{s.sale_date}</td>
                     <td className="px-4 py-3">
-                      <button onClick={() => handleDelete(s.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" data-testid="delete-sale-btn">
-                        <Trash2 size={14} className="text-red-400" />
-                      </button>
+                      {isAdmin ? (
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => openEditModal(s)} className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" data-testid="edit-sale-btn">
+                            <Pencil size={14} className="text-blue-500" />
+                          </button>
+                          <button onClick={() => handleDelete(s.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" data-testid="delete-sale-btn">
+                            <Trash2 size={14} className="text-red-400" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-300">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}
