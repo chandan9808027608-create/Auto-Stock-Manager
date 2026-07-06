@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Plus, Search, Phone, MapPin, ShoppingBag, Star, Trash2, Edit } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
+import { formatNPR } from "../utils/helpers";
 
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
@@ -98,7 +99,7 @@ export default function Customers() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-100">
-                  {["Customer", "Contact", "Address", "Purchases", "Type", "Actions"].map(h => (
+                  {["Customer", "Contact", "Address", "Purchases", "Type", "Due", "Actions"].map(h => (
                     <th key={h} className="text-left text-xs font-semibold uppercase tracking-wider text-slate-500 px-4 py-3">{h}</th>
                   ))}
                 </tr>
@@ -129,6 +130,13 @@ export default function Customers() {
                         <span className="flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold"><Star size={10} />Repeat</span>
                       ) : (
                         <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">New</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {c.total_due > 0 ? (
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${c.has_overdue ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"}`} data-testid="customer-due-badge">{formatNPR(c.total_due)}{c.has_overdue ? " (Overdue)" : ""}</span>
+                      ) : (
+                        <span className="text-xs text-green-600">Paid Up</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
