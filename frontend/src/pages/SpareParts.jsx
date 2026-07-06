@@ -267,8 +267,8 @@ export default function SpareParts() {
           <h1 className="text-2xl font-bold text-slate-900">Spare Parts</h1>
           <p className="text-sm text-slate-500">{parts.length} parts in inventory</p>
         </div>
-        <button onClick={openBulkAdd} data-testid="bulk-add-part-btn" className="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2.5 rounded-lg transition-all active:scale-95 shadow-sm mr-2"><Layers size={16} /> Bulk Add (Bill)</button><button onClick={openAdd} data-testid="add-part-btn" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-all active:scale-95 shadow-sm">
-          <Plus size={16} /> Add Part
+        <button onClick={openBulkAdd} data-testid="bulk-add-part-btn" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-all active:scale-95 shadow-sm">
+          <Layers size={16} /> Bulk Add (Bill)
         </button>
       </div>
 
