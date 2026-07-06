@@ -478,6 +478,11 @@ export default function Sales() {
                 <div className="text-right">
                   <div className="text-xs text-slate-500">Grand Total</div>
                   <div className="text-xl font-bold text-green-700" style={{ fontFamily: "Manrope" }} data-testid="grand-total-value">{formatNPR(grandTotal)}</div>
+                  {amountDue > 0 && (
+                    <span className="inline-block mt-1 text-xs font-semibold text-red-700 bg-red-100 px-2 py-0.5 rounded-full" data-testid="due-amount-bubble">
+                      Due: {formatNPR(amountDue)}
+                    </span>
+                  )}
                 </div>
               </div>
 
