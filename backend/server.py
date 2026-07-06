@@ -249,7 +249,16 @@ class SaleCreate(BaseModel):
     sale_price: float
     extra_expenses: List[dict] = []  # [{name: str, amount: float}]
     payment_method: str = "Cash"
+    paid_cash: float = 0
+    paid_bank: float = 0
+    due_date: Optional[str] = None
     sale_date: Optional[str] = None
+    notes: Optional[str] = None
+
+class SalePaymentCreate(BaseModel):
+    amount: float
+    method: str = "Cash"
+    payment_date: Optional[str] = None
     notes: Optional[str] = None
 
 class CustomerCreate(BaseModel):
@@ -524,6 +533,10 @@ async def get_customers(cu: dict = Depends(get_current_user)):
     for c in customers:
         cnt = await db.vehicles.count_documents({"customer_id": c["id"]})
         c["purchase_count"] = cnt; c["is_repeat_customer"] = cnt > 1
+        cust_sales = await db.sales.find({"customer_id": c["id"]}, {"_id": 0, "due_amount": 1, "due_date": 1}).to_list(1000)
+        c["total_due"] = round(sum(cs.get("due_amount", 0) for cs in cust_sales), 2)
+        today_iso2 = datetime.now(timezone.utc).date().isoformat()
+        c["has_overdue"] = any((cs.get("due_amount", 0) > 0 and cs.get("due_date") and cs.get("due_date") < today_iso2) for cs in cust_sales)
     return customers
 
 @api_router.post("/customers")
@@ -575,6 +588,9 @@ async def create_sale(sale: SaleCreate, cu: dict = Depends(get_current_user)):
     if v.get("status") != "available": raise HTTPException(400, f"Vehicle is already {v.get('status')}")
     expenses_total = sum(float(e.get("amount", 0)) for e in sale.extra_expenses)
     total_amount = sale.sale_price + expenses_total
+    paid_total = (sale.paid_cash or 0) + (sale.paid_bank or 0)
+    due_amount = max(round(total_amount - paid_total, 2), 0)
+    payment_status = "Paid" if due_amount <= 0 else ("Partial" if paid_total > 0 else "Unpaid")
     sale_date = sale.sale_date or datetime.now(timezone.utc).date().isoformat()
     doc = {
         "id": str(uuid.uuid4()),
@@ -585,6 +601,12 @@ async def create_sale(sale: SaleCreate, cu: dict = Depends(get_current_user)):
         "expenses_total": expenses_total,
         "total_amount": total_amount,
         "payment_method": sale.payment_method,
+        "paid_cash": sale.paid_cash or 0,
+        "paid_bank": sale.paid_bank or 0,
+        "due_amount": due_amount,
+        "due_date": sale.due_date,
+        "payment_status": payment_status,
+        "payment_history": [],
         "sale_date": sale_date,
         "notes": sale.notes,
         "created_by": cu.get("username"),
@@ -612,7 +634,11 @@ async def get_sales_summary(cu: dict = Depends(get_current_user)):
     this_month = datetime.now(timezone.utc).strftime("%Y-%m")
     monthly = [s for s in sales if s.get("sale_date", "").startswith(this_month)]
     avg = total_revenue / len(sales) if sales else 0
-    return {"total_sales": len(sales), "total_revenue": total_revenue, "this_month_sales": len(monthly), "this_month_revenue": sum(s.get("total_amount", 0) for s in monthly), "avg_sale_price": round(avg, 2)}
+    total_due = round(sum(s.get("due_amount", 0) for s in sales), 2)
+    today_iso = datetime.now(timezone.utc).date().isoformat()
+    due_count = sum(1 for s in sales if s.get("due_amount", 0) > 0)
+    overdue_count = sum(1 for s in sales if s.get("due_amount", 0) > 0 and s.get("due_date") and s.get("due_date") < today_iso)
+    return {"total_sales": len(sales), "total_revenue": total_revenue, "this_month_sales": len(monthly), "this_month_revenue": sum(s.get("total_amount", 0) for s in monthly), "avg_sale_price": round(avg, 2), "total_due": total_due, "due_count": due_count, "overdue_count": overdue_count}
 
 @api_router.get("/sales/{sid}")
 async def get_sale(sid: str, cu: dict = Depends(get_current_user)):
@@ -631,6 +657,28 @@ async def delete_sale(sid: str, cu: dict = Depends(get_current_user)):
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }})
     return {"message": "Sale deleted, vehicle restored to available"}
+
+@api_router.post("/sales/{sid}/payments")
+async def add_sale_payment(sid: str, payment: SalePaymentCreate, cu: dict = Depends(get_current_user)):
+    s = await db.sales.find_one({"id": sid}, {"_id": 0})
+    if not s: raise HTTPException(404, "Sale not found")
+    current_due = float(s.get("due_amount", 0))
+    amount = float(payment.amount)
+    if amount <= 0: raise HTTPException(400, "Invalid payment amount")
+    if current_due > 0 and amount > current_due: amount = current_due
+    new_due = max(round(current_due - amount, 2), 0)
+    update = {"due_amount": new_due}
+    if payment.method == "Bank Transfer":
+        update["paid_bank"] = float(s.get("paid_bank", 0)) + amount
+    else:
+        update["paid_cash"] = float(s.get("paid_cash", 0)) + amount
+    update["payment_status"] = "Paid" if new_due <= 0 else "Partial"
+    entry = {"amount": amount, "method": payment.method, "payment_date": payment.payment_date or datetime.now(timezone.utc).date().isoformat(), "notes": payment.notes}
+    history = (s.get("payment_history") or []) + [entry]
+    update["payment_history"] = history
+    await db.sales.update_one({"id": sid}, {"$set": update})
+    updated = await db.sales.find_one({"id": sid}, {"_id": 0})
+    return updated
 
 # ── TEAM ──────────────────────────────────────────────────────────────
 @api_router.get("/team")
