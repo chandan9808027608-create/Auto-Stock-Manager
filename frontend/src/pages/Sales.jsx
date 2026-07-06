@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Search, Trash2, TrendingUp, DollarSign, Calendar, ShoppingBag, X, ChevronDown, ChevronUp, UserPlus } from "lucide-react";
+import { Plus, Search, Trash2, TrendingUp, DollarSign, Calendar, ShoppingBag, X, ChevronDown, ChevronUp, UserPlus, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR } from "../utils/helpers";
 
-const PAYMENT_METHODS = ["Cash", "Bank Transfer", "EMI", "Cheque", "Digital Wallet"];
+const PAID_BY_OPTIONS = ["Cash", "Bank Transfer"];
 
 const PRESET_EXPENSES = [
   { name: "Registration Transfer Fee", amount: 2000 },
@@ -29,7 +29,7 @@ const Field = ({ label, required, children }) => (
 
 const EMPTY_FORM = {
   vehicle_id: "", customer_id: "", sale_price: "",
-  payment_method: "Cash", paid_cash: "", paid_bank: "", due_date: "", sale_date: "", notes: "",
+  payment_method: "Cash", paid_amount: "", due_date: "", sale_date: "", notes: "",
 };
 
 export default function Sales() {
@@ -52,9 +52,8 @@ export default function Sales() {
   const [editingId, setEditingId] = useState(null);
 
   // Extra expenses state
-  const [checkedPresets, setCheckedPresets] = useState({});      // { "Registration Transfer Fee": true }
-  const [presetAmounts, setPresetAmounts] = useState({});        // { "Registration Transfer Fee": 2000 }
-  const [customExpenses, setCustomExpenses] = useState([]);       // [{name, amount}]
+  const [expenseItems, setExpenseItems] = useState([]);          // [{name, amount}] - added one by one
+  const [presetToAdd, setPresetToAdd] = useState("");
   const [newExpName, setNewExpName] = useState("");
   const [newExpAmt, setNewExpAmt] = useState("");
   const [showPresets, setShowPresets] = useState(true);
@@ -72,9 +71,8 @@ export default function Sales() {
   const openModal = async () => {
     setEditingId(null);
     setForm(EMPTY_FORM);
-    setCheckedPresets({});
-    setPresetAmounts(Object.fromEntries(PRESET_EXPENSES.map(e => [e.name, e.amount])));
-    setCustomExpenses([]);
+    setExpenseItems([]);
+    setPresetToAdd("");
     setNewExpName(""); setNewExpAmt("");
     setShowAddCust(false);
     setNewCust({ name: "", contact_number: "", address: "" });
@@ -87,36 +85,23 @@ export default function Sales() {
 
   const openEditModal = async (sale) => {
     setEditingId(sale.id);
+    const paidCash = Number(sale.paid_cash) || 0;
+    const paidBank = Number(sale.paid_bank) || 0;
     setForm({
       vehicle_id: sale.vehicle_id,
       customer_id: sale.customer_id || "",
       sale_price: sale.sale_price,
-      payment_method: sale.payment_method,
+      payment_method: paidBank > paidCash ? "Bank Transfer" : "Cash",
+      paid_amount: (paidCash + paidBank) || "",
+      due_date: sale.due_date || "",
       sale_date: sale.sale_date || "",
       notes: sale.notes || "",
     });
-    
-    // Restore extra expenses state
-    let presetsMap = {};
-    let presetsAmounts = Object.fromEntries(PRESET_EXPENSES.map(e => [e.name, e.amount]));
-    let customExp = [];
-    
-    if (sale.extra_expenses?.length > 0) {
-      sale.extra_expenses.forEach(exp => {
-        const preset = PRESET_EXPENSES.find(p => p.name === exp.name);
-        if (preset) {
-          presetsMap[exp.name] = true;
-          presetsAmounts[exp.name] = exp.amount;
-        } else {
-          customExp.push(exp);
-        }
-      });
-    }
-    
-    setCheckedPresets(presetsMap);
-    setPresetAmounts(presetsAmounts);
-    setCustomExpenses(customExp);
-    
+
+    // Restore extra expenses list
+    setExpenseItems(sale.extra_expenses?.length > 0 ? sale.extra_expenses : []);
+    setPresetToAdd("");
+
     setNewExpName(""); setNewExpAmt("");
     setShowAddCust(false);
     setNewCust({ name: "", contact_number: "", address: "" });
@@ -142,38 +127,45 @@ export default function Sales() {
   };
 
   // Compute total extra expenses
-  const extraExpenses = [
-    ...PRESET_EXPENSES.filter(e => checkedPresets[e.name]).map(e => ({ name: e.name, amount: Number(presetAmounts[e.name] || e.amount) })),
-    ...customExpenses,
-  ];
+  const extraExpenses = expenseItems;
   const expensesTotal = extraExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
   const grandTotal = (Number(form.sale_price) || 0) + expensesTotal;
-  const amountPaid = (Number(form.paid_cash) || 0) + (Number(form.paid_bank) || 0);
+  const amountPaid = Number(form.paid_amount) || 0;
   const amountDue = Math.max(Number((grandTotal - amountPaid).toFixed(2)), 0);
 
-  const togglePreset = (name) => setCheckedPresets(prev => ({ ...prev, [name]: !prev[name] }));
+  const availablePresets = PRESET_EXPENSES.filter(p => !expenseItems.some(e => e.name === p.name));
+
+  const addPresetExpense = (name) => {
+    const preset = PRESET_EXPENSES.find(p => p.name === name);
+    if (!preset) return;
+    setExpenseItems(prev => [...prev, { name: preset.name, amount: preset.amount }]);
+    setPresetToAdd("");
+  };
 
   const addCustomExpense = () => {
     if (!newExpName || !newExpAmt) { toast.error("Enter name and amount"); return; }
-    setCustomExpenses(prev => [...prev, { name: newExpName, amount: Number(newExpAmt) }]);
+    setExpenseItems(prev => [...prev, { name: newExpName, amount: Number(newExpAmt) }]);
     setNewExpName(""); setNewExpAmt("");
   };
 
-  const removeCustomExpense = (idx) => setCustomExpenses(prev => prev.filter((_, i) => i !== idx));
+  const updateExpenseAmount = (idx, amount) => setExpenseItems(prev => prev.map((e, i) => i === idx ? { ...e, amount } : e));
+
+  const removeExpenseItem = (idx) => setExpenseItems(prev => prev.filter((_, i) => i !== idx));
 
   const handleSave = async (e) => {
     e.preventDefault();
     if (!form.vehicle_id || !form.sale_price) { toast.error("Vehicle and Sale Price are required"); return; }
     setSaving(true);
     try {
+      const paidAmount = Number(form.paid_amount) || 0;
       const payload = {
         vehicle_id: form.vehicle_id,
         customer_id: form.customer_id || null,
         sale_price: Number(form.sale_price),
-        extra_expenses: extraExpenses,
-        payment_method: (Number(form.paid_bank) > 0 && Number(form.paid_cash) > 0) ? "Cash + Bank Transfer" : (Number(form.paid_bank) > 0 ? "Bank Transfer" : (Number(form.paid_cash) > 0 ? "Cash" : "Due")),
-        paid_cash: Number(form.paid_cash) || 0,
-        paid_bank: Number(form.paid_bank) || 0,
+        extra_expenses: extraExpenses.map(e => ({ name: e.name, amount: Number(e.amount) || 0 })),
+        payment_method: paidAmount > 0 ? form.payment_method : "Due",
+        paid_cash: form.payment_method === "Cash" ? paidAmount : 0,
+        paid_bank: form.payment_method === "Bank Transfer" ? paidAmount : 0,
         due_date: form.due_date || undefined,
         sale_date: form.sale_date || undefined,
         notes: form.notes,
@@ -371,6 +363,11 @@ export default function Sales() {
                 </select>
               </Field>
 
+              {/* Sale Date */}
+              <Field label="Sale Date">
+                <input type="date" value={form.sale_date} onChange={e => setForm({...form, sale_date: e.target.value})} className={inp} />
+              </Field>
+
               {/* Customer */}
               <Field label="Customer">
                 <div className="flex gap-2">
@@ -400,20 +397,22 @@ export default function Sales() {
                 )}
               </Field>
 
-              {/* Sale Price + Payment */}
+              {/* Sale Price + Paid By */}
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Sale Price (NPR)" required>
                   <input type="text" inputMode="numeric" value={form.sale_price} onChange={e => setForm({...form, sale_price: e.target.value})} placeholder="e.g. 185000" className={inp} data-testid="sale-price-input" />
                 </Field>
-                <Field label="Paid by Cash (NPR)">
-              <input type="text" inputMode="numeric" value={form.paid_cash} onChange={e => setForm({...form, paid_cash: e.target.value})} placeholder="0" className={inp} data-testid="paid-cash-input" />
-            </Field>
-            <Field label="Paid by Bank Transfer (NPR)">
-              <input type="text" inputMode="numeric" value={form.paid_bank} onChange={e => setForm({...form, paid_bank: e.target.value})} placeholder="0" className={inp} data-testid="paid-bank-input" />
-            </Field>
+                <Field label="Paid By">
+                  <select value={form.payment_method} onChange={e => setForm({...form, payment_method: e.target.value})} className={sel} data-testid="paid-by-select">
+                    {PAID_BY_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </Field>
               </div>
 
-              {/* Sale Date */}
+              <Field label="Amount Paid (NPR)">
+                <input type="text" inputMode="numeric" value={form.paid_amount} onChange={e => setForm({...form, paid_amount: e.target.value})} placeholder="0" className={inp} data-testid="paid-amount-input" />
+              </Field>
+
               {amountDue > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3" data-testid="due-alert-box">
                 <div className="text-sm text-red-700 font-semibold">Due Amount: {formatNPR(amountDue)}</div>
@@ -423,10 +422,6 @@ export default function Sales() {
                 </div>
               </div>
             )}
-
-            <Field label="Sale Date">
-                <input type="date" value={form.sale_date} onChange={e => setForm({...form, sale_date: e.target.value})} className={inp} />
-              </Field>
 
               {/* Extra Expenses */}
               <div className="border border-slate-200 rounded-xl overflow-hidden">
@@ -440,22 +435,21 @@ export default function Sales() {
 
                 {showPresets && (
                   <div className="p-4 space-y-3">
-                    {/* Preset checkboxes */}
-                    <p className="text-xs text-slate-500 font-medium">Preset Fees</p>
-                    <div className="space-y-2">
-                      {PRESET_EXPENSES.map(e => (
-                        <div key={e.name} className="flex items-center gap-3">
-                          <input type="checkbox" id={e.name} checked={!!checkedPresets[e.name]} onChange={() => togglePreset(e.name)} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" data-testid={`preset-${e.name.replace(/ /g,"-").toLowerCase()}`} />
-                          <label htmlFor={e.name} className="flex-1 text-sm text-slate-700 cursor-pointer">{e.name}</label>
-                          <input
-                            type="text" inputMode="numeric"
-                            value={presetAmounts[e.name] ?? e.amount}
-                            onChange={ev => setPresetAmounts(prev => ({ ...prev, [e.name]: ev.target.value }))}
-                            disabled={!checkedPresets[e.name]}
-                            className="w-24 h-7 px-2 text-xs text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-40 disabled:bg-slate-50"
-                          />
-                        </div>
-                      ))}
+                    {/* Preset dropdown - select to add one by one */}
+                    <div>
+                      <p className="text-xs text-slate-500 font-medium mb-2">Add Preset Fee</p>
+                      <select
+                        value={presetToAdd}
+                        onChange={e => addPresetExpense(e.target.value)}
+                        className={sel}
+                        disabled={availablePresets.length === 0}
+                        data-testid="preset-expense-select"
+                      >
+                        <option value="">{availablePresets.length === 0 ? "All preset fees added" : "Select a fee to add..."}</option>
+                        {availablePresets.map(e => (
+                          <option key={e.name} value={e.name}>{e.name} — {formatNPR(e.amount)}</option>
+                        ))}
+                      </select>
                     </div>
 
                     {/* Custom expenses */}
@@ -466,20 +460,28 @@ export default function Sales() {
                         <input type="text" inputMode="numeric" value={newExpAmt} onChange={e => setNewExpAmt(e.target.value)} placeholder="Amount" className="w-24 h-8 px-2 text-sm text-right border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500" data-testid="custom-exp-amount" />
                         <button type="button" onClick={addCustomExpense} className="h-8 px-3 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors shrink-0" data-testid="add-custom-exp-btn">Add</button>
                       </div>
-                      {customExpenses.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {customExpenses.map((ex, i) => (
-                            <div key={i} className="flex items-center justify-between text-xs bg-slate-50 rounded-lg px-2 py-1.5 border border-slate-100">
-                              <span className="text-slate-700">{ex.name}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-slate-800">{formatNPR(ex.amount)}</span>
-                                <button type="button" onClick={() => removeCustomExpense(i)} className="text-red-400 hover:text-red-600"><X size={11} /></button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </div>
+
+                    {/* Added expenses list */}
+                    {expenseItems.length > 0 && (
+                      <div className="border-t border-slate-100 pt-3 space-y-1">
+                        <p className="text-xs text-slate-500 font-medium mb-1">Added Expenses</p>
+                        {expenseItems.map((ex, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs bg-slate-50 rounded-lg px-2 py-1.5 border border-slate-100">
+                            <span className="text-slate-700">{ex.name}</span>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text" inputMode="numeric"
+                                value={ex.amount}
+                                onChange={ev => updateExpenseAmount(i, ev.target.value)}
+                                className="w-20 h-6 px-1.5 text-xs text-right border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                              <button type="button" onClick={() => removeExpenseItem(i)} className="text-red-400 hover:text-red-600"><X size={11} /></button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
