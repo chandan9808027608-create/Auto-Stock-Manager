@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Search, Trash2, TrendingUp, DollarSign, Calendar, ShoppingBag, X, ChevronDown, ChevronUp, UserPlus } from "lucide-react";
+import { Plus, Search, Trash2, TrendingUp, DollarSign, Calendar, ShoppingBag, X, ChevronDown, ChevronUp, UserPlus, Edit2 } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR } from "../utils/helpers";
@@ -39,6 +39,7 @@ export default function Sales() {
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
   // Modal state
   const [form, setForm] = useState(EMPTY_FORM);
@@ -69,6 +70,7 @@ export default function Sales() {
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const openModal = async () => {
+    setEditingId(null);
     setForm(EMPTY_FORM);
     setCheckedPresets({});
     setPresetAmounts(Object.fromEntries(PRESET_EXPENSES.map(e => [e.name, e.amount])));
@@ -79,6 +81,48 @@ export default function Sales() {
     setShowModal(true);
     try {
       const [v, c] = await Promise.all([api.get("/vehicles?status=available"), api.get("/customers")]);
+      setVehicles(v.data); setCustomers(c.data);
+    } catch { toast.error("Failed to load vehicles/customers"); }
+  };
+
+  const openEditModal = async (sale) => {
+    setEditingId(sale.id);
+    setForm({
+      vehicle_id: sale.vehicle_id,
+      customer_id: sale.customer_id || "",
+      sale_price: sale.sale_price,
+      payment_method: sale.payment_method,
+      sale_date: sale.sale_date || "",
+      notes: sale.notes || "",
+    });
+    
+    // Restore extra expenses state
+    let presetsMap = {};
+    let presetsAmounts = Object.fromEntries(PRESET_EXPENSES.map(e => [e.name, e.amount]));
+    let customExp = [];
+    
+    if (sale.extra_expenses?.length > 0) {
+      sale.extra_expenses.forEach(exp => {
+        const preset = PRESET_EXPENSES.find(p => p.name === exp.name);
+        if (preset) {
+          presetsMap[exp.name] = true;
+          presetsAmounts[exp.name] = exp.amount;
+        } else {
+          customExp.push(exp);
+        }
+      });
+    }
+    
+    setCheckedPresets(presetsMap);
+    setPresetAmounts(presetsAmounts);
+    setCustomExpenses(customExp);
+    
+    setNewExpName(""); setNewExpAmt("");
+    setShowAddCust(false);
+    setNewCust({ name: "", contact_number: "", address: "" });
+    setShowModal(true);
+    try {
+      const [v, c] = await Promise.all([api.get("/vehicles"), api.get("/customers")]);
       setVehicles(v.data); setCustomers(c.data);
     } catch { toast.error("Failed to load vehicles/customers"); }
   };
@@ -120,7 +164,7 @@ export default function Sales() {
     if (!form.vehicle_id || !form.sale_price) { toast.error("Vehicle and Sale Price are required"); return; }
     setSaving(true);
     try {
-      await api.post("/sales", {
+      const payload = {
         vehicle_id: form.vehicle_id,
         customer_id: form.customer_id || null,
         sale_price: Number(form.sale_price),
@@ -128,9 +172,20 @@ export default function Sales() {
         payment_method: form.payment_method,
         sale_date: form.sale_date || undefined,
         notes: form.notes,
-      });
-      toast.success("Sale recorded successfully!");
+      };
+      
+      if (editingId) {
+        // Edit existing sale
+        await api.put(`/sales/${editingId}`, payload);
+        toast.success("Sale updated successfully!");
+      } else {
+        // Create new sale
+        await api.post("/sales", payload);
+        toast.success("Sale recorded successfully!");
+      }
+      
       setShowModal(false);
+      setEditingId(null);
       fetchAll();
     } catch (err) { toast.error(err.response?.data?.detail || "Failed to save sale"); }
     finally { setSaving(false); }
@@ -238,9 +293,14 @@ export default function Sales() {
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">{s.sale_date}</td>
                     <td className="px-4 py-3">
-                      <button onClick={() => handleDelete(s.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" data-testid="delete-sale-btn">
-                        <Trash2 size={14} className="text-red-400" />
-                      </button>
+                      <div className="flex gap-2">
+                        <button onClick={() => openEditModal(s)} className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" data-testid="edit-sale-btn" title="Edit sale">
+                          <Edit2 size={14} className="text-blue-500" />
+                        </button>
+                        <button onClick={() => handleDelete(s.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" data-testid="delete-sale-btn">
+                          <Trash2 size={14} className="text-red-400" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -255,7 +315,7 @@ export default function Sales() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-900">Record Sale</h2>
+              <h2 className="text-lg font-bold text-slate-900">{editingId ? "Edit Sale" : "Record Sale"}</h2>
               <button onClick={() => setShowModal(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
             </div>
             <form onSubmit={handleSave} className="p-5 space-y-4">
@@ -394,7 +454,7 @@ export default function Sales() {
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 h-10 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
                 <button type="submit" disabled={saving} data-testid="save-sale-btn" className="flex-1 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 active:scale-95 transition-all">
-                  {saving ? "Saving..." : "Record Sale"}
+                  {saving ? "Saving..." : (editingId ? "Update Sale" : "Record Sale")}
                 </button>
               </div>
             </form>

@@ -631,6 +631,66 @@ async def delete_sale(sid: str, cu: dict = Depends(get_current_user)):
     }})
     return {"message": "Sale deleted, vehicle restored to available"}
 
+@api_router.put("/sales/{sid}")
+async def update_sale(sid: str, sale: SaleCreate, cu: dict = Depends(get_current_user)):
+    s = await db.sales.find_one({"id": sid}, {"_id": 0})
+    if not s: raise HTTPException(404, "Sale not found")
+    
+    # Verify vehicle exists
+    v = await db.vehicles.find_one({"id": sale.vehicle_id}, {"_id": 0})
+    if not v: raise HTTPException(404, "Vehicle not found")
+    
+    # If vehicle_id changed, handle the status change
+    if s["vehicle_id"] != sale.vehicle_id:
+        # Restore old vehicle to available
+        await db.vehicles.update_one({"id": s["vehicle_id"]}, {"$set": {
+            "status": "available", "sold_date": None, "customer_id": None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }})
+        # Mark new vehicle as sold
+        await db.vehicles.update_one({"id": sale.vehicle_id}, {"$set": {
+            "status": "sold",
+            "selling_price": sale.sale_price,
+            "sold_date": sale.sale_date or datetime.now(timezone.utc).date().isoformat(),
+            "customer_id": sale.customer_id,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }})
+    else:
+        # Update selling price and customer for same vehicle
+        await db.vehicles.update_one({"id": sale.vehicle_id}, {"$set": {
+            "selling_price": sale.sale_price,
+            "customer_id": sale.customer_id,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }})
+    
+    # Calculate total expenses
+    expenses_total = sum(float(e.get("amount", 0)) for e in sale.extra_expenses)
+    total_amount = sale.sale_price + expenses_total
+    sale_date = sale.sale_date or s.get("sale_date", datetime.now(timezone.utc).date().isoformat())
+    
+    # Update sale record
+    update_data = {
+        "vehicle_id": sale.vehicle_id,
+        "customer_id": sale.customer_id,
+        "sale_price": sale.sale_price,
+        "extra_expenses": sale.extra_expenses,
+        "expenses_total": expenses_total,
+        "total_amount": total_amount,
+        "payment_method": sale.payment_method,
+        "sale_date": sale_date,
+        "notes": sale.notes,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    
+    await db.sales.update_one({"id": sid}, {"$set": update_data})
+    
+    # Update customer if needed
+    if sale.customer_id:
+        await db.customers.update_one({"id": sale.customer_id}, {"$set": {"last_purchase_date": sale_date}})
+    
+    updated = await db.sales.find_one({"id": sid}, {"_id": 0})
+    return updated
+
 # ── TEAM ──────────────────────────────────────────────────────────────
 @api_router.get("/team")
 async def get_team(cu: dict = Depends(get_current_user)):
