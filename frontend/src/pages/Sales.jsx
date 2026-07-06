@@ -49,6 +49,7 @@ export default function Sales() {
   const [showAddCust, setShowAddCust] = useState(false);
   const [newCust, setNewCust] = useState({ name: "", contact_number: "", address: "" });
   const [addingCust, setAddingCust] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
   // Extra expenses state
   const [checkedPresets, setCheckedPresets] = useState({});      // { "Registration Transfer Fee": true }
