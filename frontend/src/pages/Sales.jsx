@@ -413,16 +413,6 @@ export default function Sales() {
                 <input type="text" inputMode="numeric" value={form.paid_amount} onChange={e => setForm({...form, paid_amount: e.target.value})} placeholder="0" className={inp} data-testid="paid-amount-input" />
               </Field>
 
-              {amountDue > 0 && (
-              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3" data-testid="due-alert-box">
-                <div className="text-sm text-red-700 font-semibold">Due Amount: {formatNPR(amountDue)}</div>
-                <div className="flex items-center gap-2">
-                  <label className="text-xs text-red-600 font-medium">Due Date</label>
-                  <input type="date" value={form.due_date} onChange={e => setForm({...form, due_date: e.target.value})} className="h-8 px-2 text-sm border border-red-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 bg-white" data-testid="due-date-input" />
-                </div>
-              </div>
-            )}
-
               {/* Extra Expenses */}
               <div className="border border-slate-200 rounded-xl overflow-hidden">
                 <button type="button" onClick={() => setShowPresets(!showPresets)} className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-colors">
