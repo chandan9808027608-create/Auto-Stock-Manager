@@ -12,7 +12,7 @@ export default function Vendors() {
   const [showLedger, setShowLedger] = useState(null);
   const [ledgerData, setLedgerData] = useState(null);
   const [editItem, setEditItem] = useState(null);
-  const [form, setForm] = useState({ name: "", phone: "", address: "", notes: "" });
+  const [form, setForm] = useState({ name: "", phone: "", address: "", notes: "", vendor_type: "both" });
   const [payForm, setPayForm] = useState({ vendor_id: "", amount: "", payment_date: "", notes: "" });
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -24,8 +24,8 @@ export default function Vendors() {
 
   useEffect(() => { fetchVendors(); }, [fetchVendors]);
 
-  const openAdd = () => { setEditItem(null); setForm({ name: "", phone: "", address: "", notes: "" }); setShowModal(true); };
-  const openEdit = (v) => { setEditItem(v); setForm({ name: v.name, phone: v.phone, address: v.address || "", notes: v.notes || "" }); setShowModal(true); };
+  const openAdd = () => { setEditItem(null); setForm({ name: "", phone: "", address: "", notes: "", vendor_type: "both" }); setShowModal(true); };
+  const openEdit = (v) => { setEditItem(v); setForm({ name: v.name, phone: v.phone, address: v.address || "", notes: v.notes || "", vendor_type: v.vendor_type || "both" }); setShowModal(true); };
   const openPayment = (v) => { setSelectedVendor(v); setPayForm({ vendor_id: v.id, amount: "", payment_date: "", notes: "" }); setShowPayModal(true); };
 
   const fetchLedger = async (vendorId) => {
@@ -112,7 +112,7 @@ export default function Vendors() {
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold text-sm">{v.name[0]?.toUpperCase()}</div>
                     <div>
-                      <div className="font-bold text-slate-900">{v.name}</div>
+                      <div className="font-bold text-slate-900 flex items-center gap-2">{v.name}<span className="text-[10px] font-semibold uppercase tracking-wide bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{v.vendor_type || "both"}</span></div>
                       <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
                         <span className="flex items-center gap-1"><Phone size={11} />{v.phone}</span>
                         {v.address && <span className="flex items-center gap-1"><MapPin size={11} />{v.address}</span>}
@@ -133,12 +133,16 @@ export default function Vendors() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 mt-4">
+                <div className="grid grid-cols-4 gap-3 mt-4">
                   <div className="bg-slate-50 rounded-lg p-3 text-center">
                     <div className="text-lg font-bold text-slate-900" style={{ fontFamily: "Manrope" }}>{v.vehicle_count}</div>
                     <div className="text-xs text-slate-500">Vehicles Bought</div>
-                  </div>
-                  <div className="bg-blue-50 rounded-lg p-3 text-center">
+</div>
+<div className="bg-purple-50 rounded-lg p-3 text-center">
+<div className="text-lg font-bold text-purple-700" style={{ fontFamily: "Manrope" }}>{v.parts_count || 0}</div>
+<div className="text-xs text-purple-600">Parts Bills</div>
+</div>
+<div className="bg-blue-50 rounded-lg p-3 text-center">
                     <div className="text-sm font-bold text-blue-700">{formatNPR(v.total_purchased)}</div>
                     <div className="text-xs text-blue-600">Total Purchased</div>
                   </div>
@@ -170,7 +174,30 @@ export default function Vendors() {
                         </div>
                       </div>
                     )}
-                    {ledgerData.payments?.length > 0 ? (
+                    {ledgerData.parts_bills?.length > 0 && (
+<div className="mb-3">
+<p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Spare Parts Bills</p>
+<div className="space-y-2">
+{ledgerData.parts_bills.map((b, i) => (
+<div key={i} className="bg-purple-50 rounded-lg px-3 py-2">
+<div className="flex justify-between text-xs font-semibold text-purple-800">
+<span>Bill: {b.bill_no} · {b.entry_date}</span>
+<span>{formatNPR(b.total)}</span>
+</div>
+<div className="mt-1 space-y-0.5">
+{b.items?.map((it, j) => (
+<div key={j} className="flex justify-between text-[11px] text-slate-600">
+<span>{it.name} {it.part_number ? "(" + it.part_number + ")" : ""} x {it.quantity}</span>
+<span>{formatNPR(it.quantity * it.unit_cost)}</span>
+</div>
+))}
+</div>
+</div>
+))}
+</div>
+</div>
+)}
+{ledgerData.payments?.length > 0 ? (
                       <div>
                         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Payment History</p>
                         <div className="space-y-1.5">
@@ -209,7 +236,15 @@ export default function Vendors() {
                 </div>
               ))}
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Vendor Type</label>
+<select value={form.vendor_type || "both"} onChange={e => setForm({...form, vendor_type: e.target.value})} className={inp} data-testid="vendor-type-select">
+<option value="parts">Parts Supplier</option>
+<option value="vehicles">Vehicle Supplier</option>
+<option value="both">Both</option>
+</select>
+</div>
+<div>
+<label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
                 <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} rows={2} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
               </div>
               <div className="flex gap-3">

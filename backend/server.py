@@ -249,7 +249,16 @@ class SaleCreate(BaseModel):
     sale_price: float
     extra_expenses: List[dict] = []  # [{name: str, amount: float}]
     payment_method: str = "Cash"
+    paid_cash: float = 0
+    paid_bank: float = 0
+    due_date: Optional[str] = None
     sale_date: Optional[str] = None
+    notes: Optional[str] = None
+
+class SalePaymentCreate(BaseModel):
+    amount: float
+    method: str = "Cash"
+    payment_date: Optional[str] = None
     notes: Optional[str] = None
 
 class CustomerCreate(BaseModel):
@@ -276,6 +285,7 @@ class VendorCreate(BaseModel):
     name: str; phone: str
     address: Optional[str] = None
     notes: Optional[str] = None
+    vendor_type: Optional[str] = "both"
 
 class VendorPaymentCreate(BaseModel):
     vendor_id: str; amount: float
@@ -523,6 +533,10 @@ async def get_customers(cu: dict = Depends(get_current_user)):
     for c in customers:
         cnt = await db.vehicles.count_documents({"customer_id": c["id"]})
         c["purchase_count"] = cnt; c["is_repeat_customer"] = cnt > 1
+        cust_sales = await db.sales.find({"customer_id": c["id"]}, {"_id": 0, "due_amount": 1, "due_date": 1}).to_list(1000)
+        c["total_due"] = round(sum(cs.get("due_amount", 0) for cs in cust_sales), 2)
+        today_iso2 = datetime.now(timezone.utc).date().isoformat()
+        c["has_overdue"] = any((cs.get("due_amount", 0) > 0 and cs.get("due_date") and cs.get("due_date") < today_iso2) for cs in cust_sales)
     return customers
 
 @api_router.post("/customers")
@@ -574,6 +588,9 @@ async def create_sale(sale: SaleCreate, cu: dict = Depends(get_current_user)):
     if v.get("status") != "available": raise HTTPException(400, f"Vehicle is already {v.get('status')}")
     expenses_total = sum(float(e.get("amount", 0)) for e in sale.extra_expenses)
     total_amount = sale.sale_price + expenses_total
+    paid_total = (sale.paid_cash or 0) + (sale.paid_bank or 0)
+    due_amount = max(round(total_amount - paid_total, 2), 0)
+    payment_status = "Paid" if due_amount <= 0 else ("Partial" if paid_total > 0 else "Unpaid")
     sale_date = sale.sale_date or datetime.now(timezone.utc).date().isoformat()
     doc = {
         "id": str(uuid.uuid4()),
@@ -584,6 +601,12 @@ async def create_sale(sale: SaleCreate, cu: dict = Depends(get_current_user)):
         "expenses_total": expenses_total,
         "total_amount": total_amount,
         "payment_method": sale.payment_method,
+        "paid_cash": sale.paid_cash or 0,
+        "paid_bank": sale.paid_bank or 0,
+        "due_amount": due_amount,
+        "due_date": sale.due_date,
+        "payment_status": payment_status,
+        "payment_history": [],
         "sale_date": sale_date,
         "notes": sale.notes,
         "created_by": cu.get("username"),
@@ -611,7 +634,11 @@ async def get_sales_summary(cu: dict = Depends(get_current_user)):
     this_month = datetime.now(timezone.utc).strftime("%Y-%m")
     monthly = [s for s in sales if s.get("sale_date", "").startswith(this_month)]
     avg = total_revenue / len(sales) if sales else 0
-    return {"total_sales": len(sales), "total_revenue": total_revenue, "this_month_sales": len(monthly), "this_month_revenue": sum(s.get("total_amount", 0) for s in monthly), "avg_sale_price": round(avg, 2)}
+    total_due = round(sum(s.get("due_amount", 0) for s in sales), 2)
+    today_iso = datetime.now(timezone.utc).date().isoformat()
+    due_count = sum(1 for s in sales if s.get("due_amount", 0) > 0)
+    overdue_count = sum(1 for s in sales if s.get("due_amount", 0) > 0 and s.get("due_date") and s.get("due_date") < today_iso)
+    return {"total_sales": len(sales), "total_revenue": total_revenue, "this_month_sales": len(monthly), "this_month_revenue": sum(s.get("total_amount", 0) for s in monthly), "avg_sale_price": round(avg, 2), "total_due": total_due, "due_count": due_count, "overdue_count": overdue_count}
 
 @api_router.get("/sales/{sid}")
 async def get_sale(sid: str, cu: dict = Depends(get_current_user)):
@@ -630,66 +657,6 @@ async def delete_sale(sid: str, cu: dict = Depends(get_current_user)):
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }})
     return {"message": "Sale deleted, vehicle restored to available"}
-
-@api_router.put("/sales/{sid}")
-async def update_sale(sid: str, sale: SaleCreate, cu: dict = Depends(get_current_user)):
-    s = await db.sales.find_one({"id": sid}, {"_id": 0})
-    if not s: raise HTTPException(404, "Sale not found")
-    
-    # Verify vehicle exists
-    v = await db.vehicles.find_one({"id": sale.vehicle_id}, {"_id": 0})
-    if not v: raise HTTPException(404, "Vehicle not found")
-    
-    # If vehicle_id changed, handle the status change
-    if s["vehicle_id"] != sale.vehicle_id:
-        # Restore old vehicle to available
-        await db.vehicles.update_one({"id": s["vehicle_id"]}, {"$set": {
-            "status": "available", "sold_date": None, "customer_id": None,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }})
-        # Mark new vehicle as sold
-        await db.vehicles.update_one({"id": sale.vehicle_id}, {"$set": {
-            "status": "sold",
-            "selling_price": sale.sale_price,
-            "sold_date": sale.sale_date or datetime.now(timezone.utc).date().isoformat(),
-            "customer_id": sale.customer_id,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }})
-    else:
-        # Update selling price and customer for same vehicle
-        await db.vehicles.update_one({"id": sale.vehicle_id}, {"$set": {
-            "selling_price": sale.sale_price,
-            "customer_id": sale.customer_id,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }})
-    
-    # Calculate total expenses
-    expenses_total = sum(float(e.get("amount", 0)) for e in sale.extra_expenses)
-    total_amount = sale.sale_price + expenses_total
-    sale_date = sale.sale_date or s.get("sale_date", datetime.now(timezone.utc).date().isoformat())
-    
-    # Update sale record
-    update_data = {
-        "vehicle_id": sale.vehicle_id,
-        "customer_id": sale.customer_id,
-        "sale_price": sale.sale_price,
-        "extra_expenses": sale.extra_expenses,
-        "expenses_total": expenses_total,
-        "total_amount": total_amount,
-        "payment_method": sale.payment_method,
-        "sale_date": sale_date,
-        "notes": sale.notes,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    
-    await db.sales.update_one({"id": sid}, {"$set": update_data})
-    
-    # Update customer if needed
-    if sale.customer_id:
-        await db.customers.update_one({"id": sale.customer_id}, {"$set": {"last_purchase_date": sale_date}})
-    
-    updated = await db.sales.find_one({"id": sid}, {"_id": 0})
-    return updated
 
 # ── TEAM ──────────────────────────────────────────────────────────────
 @api_router.get("/team")
@@ -775,12 +742,17 @@ async def get_vendors(cu: dict = Depends(get_current_user)):
     vendors = await db.vendors.find({}, {"_id": 0}).to_list(200)
     for v in vendors:
         vehicles = await db.vehicles.find({"vendor_id": v["id"]}, {"_id": 0}).to_list(200)
-        total_owed = sum(vh.get("purchase_price", 0) for vh in vehicles)
+        parts = await db.spare_parts.find({"vendor_id": v["id"]}, {"_id": 0}).to_list(1000)
+        vehicle_owed = sum(vh.get("purchase_price", 0) for vh in vehicles)
+        parts_owed = sum(p.get("quantity", 0) * p.get("unit_cost", 0) for p in parts)
+        total_owed = vehicle_owed + parts_owed
         payments = await db.vendor_payments.find({"vendor_id": v["id"]}, {"_id": 0}).to_list(500)
         total_paid = sum(p["amount"] for p in payments)
         v["total_purchased"] = total_owed; v["total_paid"] = total_paid
         v["remaining_due"] = max(0, total_owed - total_paid)
         v["vehicle_count"] = len(vehicles)
+        v["parts_count"] = len(parts)
+        v["parts_purchased"] = parts_owed
         v["overdue"] = v["remaining_due"] > 0
     return vendors
 
@@ -817,11 +789,21 @@ async def search_vendors(q: str = "", cu: dict = Depends(get_current_user)):
 async def get_vendor_payments(vid: str, cu: dict = Depends(get_current_user)):
     payments = await db.vendor_payments.find({"vendor_id": vid}, {"_id": 0}).sort("payment_date", -1).to_list(500)
     vehicles = await db.vehicles.find({"vendor_id": vid}, {"_id": 0}).to_list(200)
-    total_owed = sum(v.get("purchase_price", 0) for v in vehicles)
+    parts = await db.spare_parts.find({"vendor_id": vid}, {"_id": 0}).to_list(1000)
+    vehicle_owed = sum(v.get("purchase_price", 0) for v in vehicles)
+    parts_owed = sum(p.get("quantity", 0) * p.get("unit_cost", 0) for p in parts)
+    total_owed = vehicle_owed + parts_owed
     total_paid = sum(p["amount"] for p in payments)
+    bills = {}
+    for p in parts:
+        key = p.get("bill_no") or "No Bill No."
+        b = bills.setdefault(key, {"bill_no": key, "entry_date": p.get("entry_date") or (p.get("created_at", "")[:10]), "items": [], "total": 0})
+        b["items"].append(p)
+        b["total"] += p.get("quantity", 0) * p.get("unit_cost", 0)
+    parts_bills = sorted(bills.values(), key=lambda b: b["entry_date"] or "", reverse=True)
     return {"payments": payments, "total_paid": total_paid,
             "total_owed": total_owed, "remaining_due": max(0, total_owed - total_paid),
-            "vehicles": vehicles}
+            "vehicles": vehicles, "parts_bills": parts_bills}
 
 @api_router.post("/vendor-payments")
 async def create_vendor_payment(payment: VendorPaymentCreate, cu: dict = Depends(get_current_user)):
@@ -1372,6 +1354,8 @@ class SparePartCreate(BaseModel):
     unit_cost: float = 0
     selling_price: Optional[float] = None
     vendor_id: Optional[str] = None
+    bill_no: Optional[str] = None
+    entry_date: Optional[str] = None
     supplier: Optional[str] = None  # kept for backward compat
     min_stock_alert: int = 2
     location: Optional[str] = None
@@ -1386,6 +1370,8 @@ class SparePartUpdate(BaseModel):
     unit_cost: Optional[float] = None
     selling_price: Optional[float] = None
     vendor_id: Optional[str] = None
+    bill_no: Optional[str] = None
+    entry_date: Optional[str] = None
     supplier: Optional[str] = None
     min_stock_alert: Optional[int] = None
     location: Optional[str] = None
@@ -1413,6 +1399,7 @@ async def get_spare_parts(category: Optional[str] = None, low_stock: Optional[bo
 @api_router.post("/spare-parts")
 async def create_spare_part(part: SparePartCreate, cu: dict = Depends(get_current_user)):
     doc = {"id": str(uuid.uuid4()), **part.dict(), "created_at": datetime.now(timezone.utc).isoformat()}
+    if not doc.get("entry_date"): doc["entry_date"] = datetime.now(timezone.utc).date().isoformat()
     await db.spare_parts.insert_one(doc)
     doc.pop("_id", None)
     return doc
