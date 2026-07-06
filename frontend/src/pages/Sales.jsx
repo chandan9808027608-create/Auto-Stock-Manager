@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Search, Trash2, TrendingUp, DollarSign, Calendar, ShoppingBag, X, ChevronDown, ChevronUp, UserPlus } from "lucide-react";
+import { Plus, Search, Trash2, TrendingUp, DollarSign, Calendar, ShoppingBag, X, ChevronDown, ChevronUp, UserPlus, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR } from "../utils/helpers";
@@ -29,7 +29,7 @@ const Field = ({ label, required, children }) => (
 
 const EMPTY_FORM = {
   vehicle_id: "", customer_id: "", sale_price: "",
-  payment_method: "Cash", sale_date: "", notes: "",
+  payment_method: "Cash", paid_cash: "", paid_bank: "", due_date: "", sale_date: "", notes: "",
 };
 
 export default function Sales() {
@@ -39,6 +39,10 @@ export default function Sales() {
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [payModal, setPayModal] = useState(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState("Cash");
+  const [payingSaving, setPayingSaving] = useState(false);
 
   // Modal state
   const [form, setForm] = useState(EMPTY_FORM);
@@ -104,6 +108,8 @@ export default function Sales() {
   ];
   const expensesTotal = extraExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
   const grandTotal = (Number(form.sale_price) || 0) + expensesTotal;
+  const amountPaid = (Number(form.paid_cash) || 0) + (Number(form.paid_bank) || 0);
+  const amountDue = Math.max(Number((grandTotal - amountPaid).toFixed(2)), 0);
 
   const togglePreset = (name) => setCheckedPresets(prev => ({ ...prev, [name]: !prev[name] }));
 
@@ -125,7 +131,10 @@ export default function Sales() {
         customer_id: form.customer_id || null,
         sale_price: Number(form.sale_price),
         extra_expenses: extraExpenses,
-        payment_method: form.payment_method,
+        payment_method: (Number(form.paid_bank) > 0 && Number(form.paid_cash) > 0) ? "Cash + Bank Transfer" : (Number(form.paid_bank) > 0 ? "Bank Transfer" : (Number(form.paid_cash) > 0 ? "Cash" : "Due")),
+        paid_cash: Number(form.paid_cash) || 0,
+        paid_bank: Number(form.paid_bank) || 0,
+        due_date: form.due_date || undefined,
         sale_date: form.sale_date || undefined,
         notes: form.notes,
       });
@@ -143,6 +152,20 @@ export default function Sales() {
       toast.success("Sale deleted, vehicle restored");
       fetchAll();
     } catch { toast.error("Failed to delete"); }
+  };
+
+  const openPayModal = (sale) => { setPayModal(sale); setPayAmount(""); setPayMethod("Cash"); };
+
+  const submitPayment = async () => {
+    if (!payModal || !payAmount || Number(payAmount) <= 0) { toast.error("Enter a valid amount"); return; }
+    setPayingSaving(true);
+    try {
+      await api.post(`/sales/${payModal.id}/payments`, { amount: Number(payAmount), method: payMethod });
+      toast.success("Payment recorded!");
+      setPayModal(null);
+      fetchAll();
+    } catch (err) { toast.error(err.response?.data?.detail || "Failed to record payment"); }
+    finally { setPayingSaving(false); }
   };
 
   const filtered = sales.filter(s => {
@@ -187,6 +210,26 @@ export default function Sales() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {sales.filter(s => s.due_amount > 0).length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4" data-testid="due-alert-banner">
+          <div className="flex items-center gap-2 text-red-700 font-semibold text-sm mb-2">
+            <AlertTriangle size={16} />
+            Due Payments ({sales.filter(s => s.due_amount > 0).length})
+          </div>
+          <div className="space-y-1.5">
+            {sales.filter(s => s.due_amount > 0).map(s => {
+              const isOverdue = s.due_date && s.due_date < new Date().toISOString().slice(0, 10);
+              return (
+                <div key={s.id} className={`flex items-center justify-between text-sm px-3 py-2 rounded-lg ${isOverdue ? "bg-red-100" : "bg-white"}`}>
+                  <div className="text-slate-700">{s.customer_name} — {s.vehicle_info}</div>
+                  <div className={`font-semibold ${isOverdue ? "text-red-700" : "text-orange-600"}`}>{formatNPR(s.due_amount)}{s.due_date ? ` due ${s.due_date}` : ""}{isOverdue ? " (OVERDUE)" : ""}</div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -235,10 +278,18 @@ export default function Sales() {
                     <td className="px-4 py-3 text-sm font-bold text-green-700 whitespace-nowrap">{formatNPR(s.total_amount)}</td>
                     <td className="px-4 py-3">
                       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">{s.payment_method}</span>
+                  {s.due_amount > 0 ? (
+                    <div className="mt-1 text-xs font-semibold text-red-600" data-testid="due-badge">Due: {formatNPR(s.due_amount)}{s.due_date ? ` (by ${s.due_date})` : ""}</div>
+                  ) : (
+                    <div className="mt-1 text-xs text-green-600">Fully Paid</div>
+                  )}
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">{s.sale_date}</td>
                     <td className="px-4 py-3">
-                      <button onClick={() => handleDelete(s.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" data-testid="delete-sale-btn">
+                      {s.due_amount > 0 && (
+                    <button onClick={() => openPayModal(s)} className="px-2 py-1 mr-1 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors" data-testid="record-payment-btn">Record Payment</button>
+                  )}
+                  <button onClick={() => handleDelete(s.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" data-testid="delete-sale-btn">
                         <Trash2 size={14} className="text-red-400" />
                       </button>
                     </td>
@@ -306,15 +357,26 @@ export default function Sales() {
                 <Field label="Sale Price (NPR)" required>
                   <input type="text" inputMode="numeric" value={form.sale_price} onChange={e => setForm({...form, sale_price: e.target.value})} placeholder="e.g. 185000" className={inp} data-testid="sale-price-input" />
                 </Field>
-                <Field label="Payment Method">
-                  <select value={form.payment_method} onChange={e => setForm({...form, payment_method: e.target.value})} className={sel}>
-                    {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
-                  </select>
-                </Field>
+                <Field label="Paid by Cash (NPR)">
+              <input type="text" inputMode="numeric" value={form.paid_cash} onChange={e => setForm({...form, paid_cash: e.target.value})} placeholder="0" className={inp} data-testid="paid-cash-input" />
+            </Field>
+            <Field label="Paid by Bank Transfer (NPR)">
+              <input type="text" inputMode="numeric" value={form.paid_bank} onChange={e => setForm({...form, paid_bank: e.target.value})} placeholder="0" className={inp} data-testid="paid-bank-input" />
+            </Field>
               </div>
 
               {/* Sale Date */}
-              <Field label="Sale Date">
+              {amountDue > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3" data-testid="due-alert-box">
+                <div className="text-sm text-red-700 font-semibold">Due Amount: {formatNPR(amountDue)}</div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-red-600 font-medium">Due Date</label>
+                  <input type="date" value={form.due_date} onChange={e => setForm({...form, due_date: e.target.value})} className="h-8 px-2 text-sm border border-red-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-500 bg-white" data-testid="due-date-input" />
+                </div>
+              </div>
+            )}
+
+            <Field label="Sale Date">
                 <input type="date" value={form.sale_date} onChange={e => setForm({...form, sale_date: e.target.value})} className={inp} />
               </Field>
 
@@ -395,9 +457,38 @@ export default function Sales() {
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 h-10 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
                 <button type="submit" disabled={saving} data-testid="save-sale-btn" className="flex-1 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 active:scale-95 transition-all">
                   {saving ? "Saving..." : "Record Sale"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      )}
+
+      {payModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900">Record Payment</h2>
+              <button onClick={() => setPayModal(null)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 font-medium">Outstanding Due: {formatNPR(payModal.due_amount)}</div>
+              <Field label="Payment Amount (NPR)" required>
+                <input type="text" inputMode="numeric" value={payAmount} onChange={e => setPayAmount(e.target.value)} placeholder="e.g. 20000" className={inp} data-testid="pay-amount-input" />
+              </Field>
+              <Field label="Payment Method">
+                <select value={payMethod} onChange={e => setPayMethod(e.target.value)} className={sel}>
+                  <option>Cash</option>
+                  <option>Bank Transfer</option>
+                </select>
+              </Field>
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={() => setPayModal(null)} className="flex-1 h-10 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
+                <button type="button" onClick={submitPayment} disabled={payingSaving} data-testid="submit-payment-btn" className="flex-1 h-10 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 active:scale-95 transition-all">
+                  {payingSaving ? "Saving..." : "Record Payment"}
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
