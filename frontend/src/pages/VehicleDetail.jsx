@@ -291,20 +291,19 @@ export default function VehicleDetail() {
       </div>
 
       {/* Quick Status Update */}
-      {vehicle.status === "available" && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3 flex-wrap">
-          <span className="text-sm font-medium text-slate-700">Update Status:</span>
-          <button onClick={() => updateStatus("reserved")} className="px-3 py-1.5 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded-lg hover:bg-yellow-200 transition-colors">Mark Reserved</button>
-          <button onClick={() => updateStatus("sold")} className="px-3 py-1.5 bg-green-100 text-green-800 text-xs font-semibold rounded-lg hover:bg-green-200 transition-colors" data-testid="mark-sold-btn">Mark Sold</button>
-        </div>
-      )}
-      {vehicle.status === "reserved" && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3 flex-wrap">
-          <span className="text-sm font-medium text-slate-700">Update Status:</span>
-          <button onClick={() => updateStatus("available")} className="px-3 py-1.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded-lg hover:bg-blue-200 transition-colors">Mark Available</button>
-          <button onClick={() => updateStatus("sold")} className="px-3 py-1.5 bg-green-100 text-green-800 text-xs font-semibold rounded-lg hover:bg-green-200 transition-colors">Mark Sold</button>
-        </div>
-      )}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3 flex-wrap">
+        <span className="text-sm font-medium text-slate-700">Update Status:</span>
+        <select
+          value={vehicle.status}
+          onChange={e => updateStatus(e.target.value)}
+          className="h-9 px-3 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          data-testid="vehicle-status-select"
+        >
+          <option value="available">Available</option>
+          <option value="reserved">Reserved</option>
+          <option value="sold">Sold</option>
+        </select>
+      </div>
 
       {/* Tabs */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
