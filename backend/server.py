@@ -532,9 +532,8 @@ async def delete_job(jid: str, cu: dict = Depends(get_current_user)):
 async def get_customers(cu: dict = Depends(get_current_user)):
     customers = await db.customers.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     for c in customers:
-        cnt = await db.vehicles.count_documents({"customer_id": c["id"]})
-        c["purchase_count"] = cnt; c["is_repeat_customer"] = cnt > 1
         cust_sales = await db.sales.find({"customer_id": c["id"]}, {"_id": 0, "due_amount": 1, "due_date": 1}).to_list(1000)
+        c["purchase_count"] = len(cust_sales); c["is_repeat_customer"] = len(cust_sales) > 1
         c["total_due"] = round(sum(cs.get("due_amount", 0) for cs in cust_sales), 2)
         today_iso2 = datetime.now(timezone.utc).date().isoformat()
         c["has_overdue"] = any((cs.get("due_amount", 0) > 0 and cs.get("due_date") and cs.get("due_date") < today_iso2) for cs in cust_sales)
