@@ -553,9 +553,13 @@ async def create_customer(cust: CustomerCreate, cu: dict = Depends(get_current_u
 async def get_customer(cid: str, cu: dict = Depends(get_current_user)):
     c = await db.customers.find_one({"id": cid}, {"_id": 0})
     if not c: raise HTTPException(404, "Not found")
-    purchases = await db.vehicles.find({"customer_id": cid}, {"_id": 0}).to_list(100)
-    c["purchases"] = purchases; c["purchase_count"] = len(purchases)
-    c["is_repeat_customer"] = len(purchases) > 1
+    sales = await db.sales.find({"customer_id": cid}, {"_id": 0}).sort("sale_date", -1).to_list(200)
+    for s in sales:
+        v = await db.vehicles.find_one({"id": s.get("vehicle_id")}, {"_id": 0, "brand": 1, "model": 1, "year": 1, "registration_number": 1})
+        s["vehicle_info"] = f"{v['brand']} {v['model']} {v.get('year','')}" + (f" ({v['registration_number']})" if v.get("registration_number") else "") if v else "Vehicle removed"
+    c["sales"] = sales
+    c["purchase_count"] = len(sales)
+    c["is_repeat_customer"] = len(sales) > 1
     return c
 
 @api_router.put("/customers/{cid}")

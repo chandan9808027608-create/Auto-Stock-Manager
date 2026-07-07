@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Search, Phone, MapPin, ShoppingBag, Star, Trash2, Edit } from "lucide-react";
+import { Plus, Search, Phone, MapPin, ShoppingBag, Star, Trash2, Edit, Eye } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR } from "../utils/helpers";
@@ -13,6 +13,10 @@ export default function Customers() {
   const [editItem, setEditItem] = useState(null);
   const [form, setForm] = useState({ name: "", contact_number: "", address: "", notes: "" });
   const [saving, setSaving] = useState(false);
+
+  // View customer detail
+  const [viewCustomer, setViewCustomer] = useState(null);
+  const [viewLoading, setViewLoading] = useState(false);
 
   const fetchCustomers = useCallback(async () => {
     try { const r = await api.get("/customers"); setCustomers(r.data); }
@@ -29,6 +33,16 @@ export default function Customers() {
 
   const openAdd = () => { setEditItem(null); setForm({ name: "", contact_number: "", address: "", notes: "" }); setShowModal(true); };
   const openEdit = (c) => { setEditItem(c); setForm({ name: c.name, contact_number: c.contact_number, address: c.address || "", notes: c.notes || "" }); setShowModal(true); };
+
+  const openView = async (c) => {
+    setViewCustomer(c);
+    setViewLoading(true);
+    try {
+      const r = await api.get(`/customers/${c.id}`);
+      setViewCustomer(r.data);
+    } catch { toast.error("Failed to load customer details"); }
+    finally { setViewLoading(false); }
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -141,6 +155,7 @@ export default function Customers() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
+                        <button onClick={() => openView(c)} className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" data-testid="view-customer-btn"><Eye size={14} className="text-blue-500" /></button>
                         <button onClick={() => openEdit(c)} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors" data-testid="edit-customer-btn"><Edit size={14} className="text-slate-500" /></button>
                         <button onClick={() => handleDelete(c.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" data-testid="delete-customer-btn"><Trash2 size={14} className="text-red-400" /></button>
                       </div>
@@ -178,6 +193,62 @@ export default function Customers() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {viewCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto" data-testid="customer-view-modal">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">{viewCustomer.name}</h2>
+                <p className="text-xs text-slate-500 mt-0.5">{viewCustomer.contact_number}{viewCustomer.address ? ` · ${viewCustomer.address}` : ""}</p>
+              </div>
+              <button onClick={() => setViewCustomer(null)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
+            </div>
+            <div className="p-5 space-y-4">
+              {viewCustomer.notes && (
+                <div className="text-sm text-slate-600 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">{viewCustomer.notes}</div>
+              )}
+
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 mb-2" style={{ fontFamily: "Manrope" }}>
+                  Purchase History {viewCustomer.sales ? `(${viewCustomer.sales.length})` : ""}
+                </h3>
+                {viewLoading ? (
+                  <div className="flex items-center justify-center h-24"><div className="animate-spin w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full" /></div>
+                ) : !viewCustomer.sales || viewCustomer.sales.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 text-sm border border-dashed border-slate-200 rounded-xl">No purchases yet</div>
+                ) : (
+                  <div className="space-y-2">
+                    {viewCustomer.sales.map(s => (
+                      <div key={s.id} className="border border-slate-100 rounded-xl p-3" data-testid="customer-purchase-row">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-semibold text-slate-900 text-sm">{s.vehicle_info}</div>
+                          <div className="text-xs text-slate-400 whitespace-nowrap">{s.sale_date}</div>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 mt-1.5">
+                          <div className="text-xs text-slate-500">
+                            Sale Price: <span className="font-medium text-slate-700">{formatNPR(s.sale_price)}</span>
+                            {s.expenses_total > 0 && <span> · Extra: <span className="font-medium text-orange-600">{formatNPR(s.expenses_total)}</span></span>}
+                          </div>
+                          <div className="text-sm font-bold text-green-700">{formatNPR(s.total_amount)}</div>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 mt-1.5">
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">{s.payment_method}</span>
+                          {s.due_amount > 0 ? (
+                            <span className="text-xs font-semibold text-red-600">Due: {formatNPR(s.due_amount)}</span>
+                          ) : (
+                            <span className="text-xs text-green-600">Fully Paid</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
