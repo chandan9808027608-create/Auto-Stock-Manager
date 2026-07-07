@@ -192,7 +192,18 @@ export default function VehicleDetail() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${ag.bg} ${ag.text}`}>{vehicle.aging?.days}d · {ag.label}</span>
-          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${st.bg} ${st.text}`}>{st.label}</span>
+          <select
+            value={vehicle.status}
+            onChange={e => updateStatus(e.target.value)}
+            className={`appearance-none cursor-pointer px-2.5 py-1 pr-6 rounded-full text-xs font-semibold uppercase tracking-wide border-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 ${st.bg} ${st.text}`}
+            style={{ backgroundImage: "none" }}
+            data-testid="vehicle-status-select"
+            title="Change vehicle status"
+          >
+            <option value="available">Available</option>
+            <option value="reserved">Reserved</option>
+            <option value="sold">Sold</option>
+          </select>
           <button onClick={() => setShowEditModal(true)} className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors" data-testid="edit-vehicle-btn"><Edit size={14} /> Edit</button>
           <button onClick={loadQR} className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors" data-testid="qr-btn"><QrCode size={14} /> QR Label</button>
         </div>
@@ -288,21 +299,6 @@ export default function VehicleDetail() {
             </div>
           </div>
         )}
-      </div>
-
-      {/* Quick Status Update */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3 flex-wrap">
-        <span className="text-sm font-medium text-slate-700">Update Status:</span>
-        <select
-          value={vehicle.status}
-          onChange={e => updateStatus(e.target.value)}
-          className="h-9 px-3 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          data-testid="vehicle-status-select"
-        >
-          <option value="available">Available</option>
-          <option value="reserved">Reserved</option>
-          <option value="sold">Sold</option>
-        </select>
       </div>
 
       {/* Tabs */}
