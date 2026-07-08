@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Calendar } from "lucide-react";
 import { adToBsDate, bsToAdDate, getBSMonthMaxDays, getCurrentBSDate, BS_MONTHS } from "../utils/nepali-date";
 
 const sel = "h-9 px-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
@@ -110,6 +111,26 @@ export default function BSDatePicker({ value, onChange, required, className = ""
         <option value="">Day</option>
         {days.map(d => <option key={d} value={d}>{d}</option>)}
       </select>
+
+      {/* AD calendar picker (alternative to the BS dropdowns above) */}
+      <div className="relative" style={{ flex: "0 0 auto" }}>
+        <button
+          type="button"
+          tabIndex={-1}
+          title="Pick from calendar (AD)"
+          className="h-9 w-9 flex items-center justify-center border border-slate-200 rounded-lg bg-white text-slate-500 hover:bg-slate-50 transition-colors"
+        >
+          <Calendar size={15} />
+        </button>
+        <input
+          type="date"
+          value={value || ""}
+          onChange={e => e.target.value && onChange(e.target.value)}
+          className="absolute inset-0 w-9 h-9 opacity-0 cursor-pointer"
+          data-testid="ad-calendar-input"
+          title="Pick from calendar (AD)"
+        />
+      </div>
     </div>
   );
 }
