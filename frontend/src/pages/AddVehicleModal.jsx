@@ -1,6 +1,7 @@
 /**
  * AddVehicleModal.jsx — extracted Add Vehicle form modal for Inventory page
  */
+import { Plus } from "lucide-react";
 import BSDatePicker from "../components/BSDatePicker";
 import VendorAutocomplete from "../components/VendorAutocomplete";
 import { BRANDS, SOURCES, CONDITIONS, FUEL_TYPES } from "../utils/helpers";
@@ -17,7 +18,21 @@ const Field = ({ label, required, children, full }) => (
   </div>
 );
 
-export function AddVehicleModal({ form, setForm, onClose, onSubmit, saving }) {
+export function AddVehicleModal({ form, setForm, onClose, onSubmit, saving, photos, setPhotos }) {
+  const addPhotos = (files) => {
+    const staged = Array.from(files).map(file => ({ file, previewUrl: URL.createObjectURL(file) }));
+    setPhotos(prev => [...prev, ...staged]);
+  };
+
+  const removePhoto = (idx) => {
+    setPhotos(prev => {
+      const next = [...prev];
+      const [removed] = next.splice(idx, 1);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return next;
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -142,6 +157,36 @@ export function AddVehicleModal({ form, setForm, onClose, onSubmit, saving }) {
               rows={2}
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
+          </div>
+
+          <div className="border-t border-slate-100 pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Vehicle Photos</p>
+              <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors bg-blue-600 hover:bg-blue-700 text-white">
+                <Plus size={12} /> Add Photo
+                <input
+                  type="file" accept="image/*" multiple className="hidden"
+                  onChange={e => { if (e.target.files.length) addPhotos(e.target.files); e.target.value = ""; }}
+                />
+              </label>
+            </div>
+            {photos.length === 0 ? (
+              <div className="border-2 border-dashed border-slate-200 rounded-xl h-24 flex flex-col items-center justify-center text-slate-400">
+                <p className="text-sm font-medium">No photos yet</p>
+                <p className="text-xs mt-0.5">Click &quot;+ Add Photo&quot; to upload</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+                {photos.map((p, idx) => (
+                  <div key={idx} className="relative group rounded-xl overflow-hidden aspect-square bg-slate-100">
+                    <img src={p.previewUrl} alt="Vehicle" className="w-full h-full object-cover" />
+                    <button type="button" onClick={() => removePhoto(idx)} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold">
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="border-t border-slate-100 pt-4">

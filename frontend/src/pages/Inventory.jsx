@@ -29,6 +29,12 @@ export default function Inventory() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [photos, setPhotos] = useState([]);
+
+  const clearStagedPhotos = () => {
+    photos.forEach(p => URL.revokeObjectURL(p.previewUrl));
+    setPhotos([]);
+  };
 
   const fetchVehicles = useCallback(async () => {
     try {
@@ -74,7 +80,7 @@ export default function Inventory() {
     }
     setSaving(true);
     try {
-      await api.post("/vehicles", {
+      const r = await api.post("/vehicles", {
         ...form,
         purchase_price: Number(form.purchase_price),
         selling_price: form.selling_price ? Number(form.selling_price) : null,
@@ -82,9 +88,17 @@ export default function Inventory() {
         engine_cc: Number(form.engine_cc),
         ownership_number: Number(form.ownership_number)
       });
+      if (photos.length > 0) {
+        const results = await Promise.allSettled(photos.map(p => {
+          const fd = new FormData(); fd.append("file", p.file);
+          return api.post(`/vehicles/${r.data.id}/photos`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+        }));
+        if (results.some(res => res.status === "rejected")) toast.error("Vehicle saved, but some photos failed to upload");
+      }
       toast.success("Vehicle added successfully!");
       setShowModal(false);
       setForm(EMPTY);
+      clearStagedPhotos();
       fetchVehicles();
     } catch (err) { toast.error(err.response?.data?.detail || "Failed to save"); }
     finally { setSaving(false); }
@@ -273,9 +287,11 @@ export default function Inventory() {
         <AddVehicleModal
           form={form}
           setForm={setForm}
-          onClose={() => { setShowModal(false); setForm(EMPTY); }}
+          onClose={() => { setShowModal(false); setForm(EMPTY); clearStagedPhotos(); }}
           onSubmit={handleSave}
           saving={saving}
+          photos={photos}
+          setPhotos={setPhotos}
         />
       )}
     </div>
