@@ -246,7 +246,7 @@ export default function VehicleDetail() {
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
             {photos.map(photo => (
               <div key={photo.id} className="relative group rounded-xl overflow-hidden aspect-square bg-slate-100" data-testid="vehicle-photo">
-                <img src={`${process.env.REACT_APP_BACKEND_URL}${photo.url}`} alt="Vehicle" className="w-full h-full object-cover" />
+                <img src={photo.url} alt="Vehicle" className="w-full h-full object-cover" />
                 <button onClick={() => deletePhoto(photo.id)} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold" data-testid="delete-photo-btn">
                   Delete
                 </button>
@@ -277,7 +277,7 @@ export default function VehicleDetail() {
                 </label>
                 {docs.map(doc => (
                   <div key={doc.id} className="mt-1.5 flex items-center justify-between bg-slate-50 rounded-lg px-2 py-1" data-testid="uploaded-doc">
-                    <a href={`${process.env.REACT_APP_BACKEND_URL}${doc.url}`} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline truncate max-w-[80px]">{doc.original_name}</a>
+                    <a href={doc.url} download={doc.original_name} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline truncate max-w-[80px]">{doc.original_name}</a>
                     <button onClick={() => deleteDoc(doc.id)} className="text-red-400 hover:text-red-600 ml-1 flex-shrink-0" title="Delete"><Trash2 size={11} /></button>
                   </div>
                 ))}
@@ -292,7 +292,7 @@ export default function VehicleDetail() {
             <div className="space-y-1">
               {legalDocs.filter(d => d.doc_type === "other").map(doc => (
                 <div key={doc.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2" data-testid="uploaded-doc-other">
-                  <a href={`${process.env.REACT_APP_BACKEND_URL}${doc.url}`} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline truncate">{doc.original_name}</a>
+                  <a href={doc.url} download={doc.original_name} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline truncate">{doc.original_name}</a>
                   <button onClick={() => deleteDoc(doc.id)} className="text-red-400 hover:text-red-600 ml-2 flex-shrink-0"><Trash2 size={13} /></button>
                 </div>
               ))}

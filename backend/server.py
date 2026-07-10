@@ -1,7 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -9,10 +8,8 @@ from passlib.context import CryptContext
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-import os, logging, jwt, uuid, json, shutil, base64
+import os, logging, jwt, uuid, json, base64
 from pydantic import BaseModel
-UPLOAD_DIR = Path(__file__).parent / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1241,15 +1238,23 @@ app.add_middleware(CORSMiddleware, allow_credentials=True,
 
 # ══════════════════════════════════════════════════════════════════════
 # ── VEHICLE PHOTO UPLOAD ──────────────────────────────────────────────
+# Stored as base64 in MongoDB (db.vehicle_photos), NOT local disk — Render's
+# free-tier filesystem is ephemeral and wipes local files on every restart,
+# which was causing uploaded photos/docs to vanish after the backend slept.
 # ══════════════════════════════════════════════════════════════════════
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_PHOTO_SIZE = 5 * 1024 * 1024  # 5 MB
 
+def _photo_out(p: dict) -> dict:
+    return {"id": p["id"], "filename": p["filename"], "uploaded_at": p["uploaded_at"],
+            "size": p["size"], "url": f"data:{p['content_type']};base64,{p['data']}"}
+
 @api_router.get("/vehicles/{vid}/photos")
 async def get_vehicle_photos(vid: str, cu: dict = Depends(get_current_user)):
-    v = await db.vehicles.find_one({"id": vid}, {"_id": 0, "photos": 1})
+    v = await db.vehicles.find_one({"id": vid}, {"_id": 0, "id": 1})
     if not v: raise HTTPException(404, "Vehicle not found")
-    return v.get("photos", [])
+    photos = await db.vehicle_photos.find({"vehicle_id": vid}, {"_id": 0}).sort("uploaded_at", 1).to_list(200)
+    return [_photo_out(p) for p in photos]
 
 @api_router.post("/vehicles/{vid}/photos")
 async def upload_vehicle_photo(vid: str, file: UploadFile = File(...), cu: dict = Depends(get_current_user)):
@@ -1260,39 +1265,39 @@ async def upload_vehicle_photo(vid: str, file: UploadFile = File(...), cu: dict 
     content = await file.read()
     if len(content) > MAX_PHOTO_SIZE:
         raise HTTPException(400, "File too large. Max 5MB.")
-    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "jpg"
     photo_id = str(uuid.uuid4())
-    filename = f"vehicle_{vid}_{photo_id}.{ext}"
-    filepath = UPLOAD_DIR / filename
-    with open(filepath, "wb") as f: f.write(content)
-    photo = {"id": photo_id, "url": f"/uploads/{filename}", "filename": filename,
-             "uploaded_at": datetime.now(timezone.utc).isoformat(), "size": len(content)}
-    await db.vehicles.update_one({"id": vid}, {"$push": {"photos": photo}})
-    return photo
+    photo = {
+        "id": photo_id, "vehicle_id": vid, "filename": file.filename or f"{photo_id}.jpg",
+        "content_type": file.content_type, "data": base64.b64encode(content).decode("ascii"),
+        "uploaded_at": datetime.now(timezone.utc).isoformat(), "size": len(content),
+    }
+    await db.vehicle_photos.insert_one(photo)
+    return _photo_out(photo)
 
 @api_router.delete("/vehicles/{vid}/photos/{photo_id}")
 async def delete_vehicle_photo(vid: str, photo_id: str, cu: dict = Depends(get_current_user)):
-    v = await db.vehicles.find_one({"id": vid}, {"_id": 0, "photos": 1})
-    if not v: raise HTTPException(404, "Vehicle not found")
-    photos = v.get("photos", [])
-    photo = next((p for p in photos if p["id"] == photo_id), None)
-    if not photo: raise HTTPException(404, "Photo not found")
-    filepath = UPLOAD_DIR / photo["filename"]
-    if filepath.exists(): filepath.unlink()
-    await db.vehicles.update_one({"id": vid}, {"$pull": {"photos": {"id": photo_id}}})
+    r = await db.vehicle_photos.delete_one({"id": photo_id, "vehicle_id": vid})
+    if r.deleted_count == 0: raise HTTPException(404, "Photo not found")
     return {"message": "Photo deleted"}
 
 # ══════════════════════════════════════════════════════════════════════
 # ── LEGAL DOCUMENT UPLOAD ─────────────────────────────────────────────
+# Also stored as base64 in MongoDB (db.legal_documents) for the same reason.
 # ══════════════════════════════════════════════════════════════════════
 ALLOWED_DOC_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/webp"}
 DOC_TYPES = ["bluebook", "insurance", "tax_clearance", "transfer", "other"]
 
+def _doc_out(d: dict) -> dict:
+    return {"id": d["id"], "filename": d["filename"], "doc_type": d["doc_type"],
+            "original_name": d["original_name"], "uploaded_at": d["uploaded_at"], "size": d["size"],
+            "url": f"data:{d['content_type']};base64,{d['data']}"}
+
 @api_router.get("/vehicles/{vid}/legal-documents")
 async def get_legal_documents(vid: str, cu: dict = Depends(get_current_user)):
-    v = await db.vehicles.find_one({"id": vid}, {"_id": 0, "legal_documents": 1})
+    v = await db.vehicles.find_one({"id": vid}, {"_id": 0, "id": 1})
     if not v: raise HTTPException(404, "Vehicle not found")
-    return v.get("legal_documents", [])
+    docs = await db.legal_documents.find({"vehicle_id": vid}, {"_id": 0}).sort("uploaded_at", 1).to_list(200)
+    return [_doc_out(d) for d in docs]
 
 @api_router.post("/vehicles/{vid}/legal-documents")
 async def upload_legal_document(vid: str, file: UploadFile = File(...), doc_type: str = Form("other"), cu: dict = Depends(get_current_user)):
@@ -1303,30 +1308,23 @@ async def upload_legal_document(vid: str, file: UploadFile = File(...), doc_type
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(400, "File too large. Max 10MB.")
-    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "pdf"
     doc_id = str(uuid.uuid4())
-    filename = f"doc_{vid}_{doc_id}.{ext}"
-    filepath = UPLOAD_DIR / filename
-    with open(filepath, "wb") as f: f.write(content)
-    doc = {"id": doc_id, "url": f"/uploads/{filename}", "filename": filename,
-           "doc_type": doc_type, "original_name": file.filename,
-           "uploaded_at": datetime.now(timezone.utc).isoformat(), "size": len(content)}
-    await db.vehicles.update_one({"id": vid}, {"$push": {"legal_documents": doc}})
+    doc = {
+        "id": doc_id, "vehicle_id": vid, "filename": file.filename or f"{doc_id}.pdf",
+        "content_type": file.content_type, "data": base64.b64encode(content).decode("ascii"),
+        "doc_type": doc_type, "original_name": file.filename,
+        "uploaded_at": datetime.now(timezone.utc).isoformat(), "size": len(content),
+    }
+    await db.legal_documents.insert_one(doc)
     # Update status field
     status_field = f"{doc_type}_status" if doc_type != "other" else None
     if status_field: await db.vehicles.update_one({"id": vid}, {"$set": {status_field: "ok"}})
-    return doc
+    return _doc_out(doc)
 
 @api_router.delete("/vehicles/{vid}/legal-documents/{doc_id}")
 async def delete_legal_document(vid: str, doc_id: str, cu: dict = Depends(get_current_user)):
-    v = await db.vehicles.find_one({"id": vid}, {"_id": 0, "legal_documents": 1})
-    if not v: raise HTTPException(404, "Vehicle not found")
-    docs = v.get("legal_documents", [])
-    doc = next((d for d in docs if d["id"] == doc_id), None)
-    if not doc: raise HTTPException(404, "Document not found")
-    filepath = UPLOAD_DIR / doc["filename"]
-    if filepath.exists(): filepath.unlink()
-    await db.vehicles.update_one({"id": vid}, {"$pull": {"legal_documents": {"id": doc_id}}})
+    r = await db.legal_documents.delete_one({"id": doc_id, "vehicle_id": vid})
+    if r.deleted_count == 0: raise HTTPException(404, "Document not found")
     return {"message": "Document deleted"}
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1492,4 +1490,3 @@ async def shutdown(): client.close()
 
 
 app.include_router(api_router)
-app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
