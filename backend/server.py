@@ -404,6 +404,124 @@ async def create_vehicle(vehicle: VehicleCreate, cu: dict = Depends(get_current_
     v.pop("_id", None)
     return v
 
+# ── Bulk Import (xlsx/csv) ─────────────────────────────────────────────
+IMPORT_REQUIRED_FIELDS = ["brand", "model", "year", "purchase_price", "purchase_date", "purchase_source"]
+
+def _import_cell_str(record: dict, key: str) -> Optional[str]:
+    val = record.get(key)
+    if val is None: return None
+    s = str(val).strip()
+    return s if s else None
+
+def _import_cell_num(record: dict, key: str):
+    val = record.get(key)
+    if val is None or str(val).strip() == "": return None
+    return float(val)
+
+@api_router.post("/vehicles/import")
+async def import_vehicles(file: UploadFile = File(...), cu: dict = Depends(get_current_user)):
+    filename = (file.filename or "").lower()
+    content = await file.read()
+    rows: List[list] = []
+
+    if filename.endswith(".csv"):
+        import csv, io
+        text = content.decode("utf-8-sig", errors="ignore")
+        rows = [row for row in csv.reader(io.StringIO(text))]
+    elif filename.endswith(".xlsx"):
+        import openpyxl, io
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+        except Exception:
+            raise HTTPException(400, "Could not read file. Make sure it's a valid .xlsx sheet.")
+        ws = wb.active
+        rows = [list(r) for r in ws.iter_rows(values_only=True)]
+    else:
+        raise HTTPException(400, "Unsupported file type. Use .xlsx or .csv")
+
+    if len(rows) < 2:
+        raise HTTPException(400, "The sheet needs a header row plus at least one data row.")
+
+    header_row = rows[0]
+    headers = []
+    for i, h in enumerate(header_row):
+        h = str(h).strip() if h is not None else ""
+        headers.append(h.lower().replace(" ", "_") if h else f"column_{i}")
+
+    docs = []
+    errors = []
+    total_data_rows = 0
+    for sheet_row_num, row in enumerate(rows[1:], start=2):
+        if all(c is None or str(c).strip() == "" for c in row):
+            continue
+        total_data_rows += 1
+        row = list(row) + [None] * (len(headers) - len(row))
+        record = dict(zip(headers, row))
+        missing = [f for f in IMPORT_REQUIRED_FIELDS if _import_cell_str(record, f) is None]
+        if missing:
+            errors.append({"row": sheet_row_num, "reason": f"Missing required field(s): {', '.join(missing)}"})
+            continue
+        try:
+            purchase_date_val = record.get("purchase_date")
+            purchase_date = purchase_date_val.date().isoformat() if isinstance(purchase_date_val, datetime) else str(purchase_date_val).strip()
+            selling_price = _import_cell_num(record, "selling_price")
+            min_selling_price = _import_cell_num(record, "minimum_selling_price")
+            km_run = _import_cell_num(record, "kilometer_run")
+            doc = {
+                "id": str(uuid.uuid4()),
+                "brand": _import_cell_str(record, "brand"),
+                "model": _import_cell_str(record, "model"),
+                "variant": _import_cell_str(record, "variant"),
+                "year": int(float(record.get("year"))),
+                "engine_cc": int(float(record.get("engine_cc"))) if _import_cell_str(record, "engine_cc") else 0,
+                "fuel_type": _import_cell_str(record, "fuel_type") or "Petrol",
+                "ownership_number": int(float(record.get("ownership_number"))) if _import_cell_str(record, "ownership_number") else 1,
+                "chassis_number": _import_cell_str(record, "chassis_number"),
+                "engine_number": _import_cell_str(record, "engine_number"),
+                "kilometer_run": int(km_run) if km_run is not None else None,
+                "condition": _import_cell_str(record, "condition") or "Good",
+                "condition_rating": int(float(record.get("condition_rating"))) if _import_cell_str(record, "condition_rating") else 7,
+                "color": _import_cell_str(record, "color"),
+                "registration_number": _import_cell_str(record, "registration_number"),
+                "purchase_price": float(record.get("purchase_price")),
+                "accessories_cost": _import_cell_num(record, "accessories_cost") or 0,
+                "purchase_date": purchase_date,
+                "purchase_source": _import_cell_str(record, "purchase_source"),
+                "vendor_id": None,
+                "purchase_from": _import_cell_str(record, "purchase_from"),
+                "selling_price": selling_price,
+                "minimum_selling_price": min_selling_price,
+                "notes": _import_cell_str(record, "notes"),
+                "status": "available",
+                "bluebook_status": "pending", "insurance_status": "pending",
+                "tax_clearance_status": "pending", "transfer_status": "pending",
+                "sold_date": None, "customer_id": None,
+                "salesperson_id": None, "salesperson_name": None, "discount": 0,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "created_by": cu["username"],
+            }
+            docs.append(doc)
+        except (ValueError, TypeError) as e:
+            errors.append({"row": sheet_row_num, "reason": f"Invalid value: {e}"})
+
+    inserted = 0
+    if docs:
+        for i in range(0, len(docs), 500):
+            batch = docs[i:i + 500]
+            result = await db.vehicles.insert_many(batch, ordered=False)
+            inserted += len(result.inserted_ids)
+        await db.audit_logs.insert_one({"action": "vehicles_bulk_imported",
+            "user": cu["username"], "timestamp": datetime.now(timezone.utc).isoformat(),
+            "details": f"Imported {inserted} vehicles via bulk import from {file.filename}"})
+
+    return {
+        "inserted": inserted,
+        "skipped": len(errors),
+        "total_rows": total_data_rows,
+        "errors": errors[:50],
+    }
+
 @api_router.get("/vehicles/{vid}")
 async def get_vehicle(vid: str, cu: dict = Depends(get_current_user)):
     v = await db.vehicles.find_one({"id": vid}, {"_id": 0})
