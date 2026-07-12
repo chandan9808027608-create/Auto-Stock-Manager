@@ -23,13 +23,13 @@ import Sales from "./pages/Sales";
 import ImportStock from "./pages/ImportStock";
 
 const ProtectedRoute = ({ children }) => {
-  const { user } = useAuth();
-  return user ? children : <Navigate to="/login" replace />;
+  const { user, token } = useAuth();
+  return (user && token) ? children : <Navigate to="/login" replace />;
 };
 
 const PublicRoute = ({ children }) => {
-  const { user } = useAuth();
-  return !user ? children : <Navigate to="/" replace />;
+  const { user, token } = useAuth();
+  return !(user && token) ? children : <Navigate to="/" replace />;
 };
 
 function AppRoutes() {

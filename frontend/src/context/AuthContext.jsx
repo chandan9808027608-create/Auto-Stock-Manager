@@ -9,11 +9,24 @@ const storage = {
   remove: (key) => localStorage.removeItem(key),
 };
 
+// If only one of user/token survived (partial storage clear, browser extension, etc.),
+// the leftover half is useless and just causes API calls to silently fail auth — drop it.
+function readInitialAuth() {
+  const user = storage.get("gng_user");
+  let token = null;
+  try { token = localStorage.getItem("gng_token") || null; } catch { token = null; }
+  if (!user || !token) {
+    storage.remove("gng_user");
+    storage.remove("gng_token");
+    return { user: null, token: null };
+  }
+  return { user, token };
+}
+
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => storage.get("gng_user"));
-  const [token, setToken] = useState(() => {
-    try { return localStorage.getItem("gng_token") || null; } catch { return null; }
-  });
+  const initial = readInitialAuth();
+  const [user, setUser] = useState(initial.user);
+  const [token, setToken] = useState(initial.token);
 
   const login = (userData, authToken) => {
     setUser(userData);
