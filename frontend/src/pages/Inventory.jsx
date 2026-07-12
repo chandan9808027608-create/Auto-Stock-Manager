@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Search, Eye, Trash2, Filter, X } from "lucide-react";
+import { Plus, Search, Eye, Trash2, Filter, X, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getAgingStyle, getStatusStyle, BRANDS } from "../utils/helpers";
@@ -280,6 +280,17 @@ export default function Inventory() {
             </table>
           </div>
         )}
+      </div>
+
+      {/* Import Stock */}
+      <div className="flex justify-center">
+        <button
+          onClick={() => navigate("/import-stock")}
+          data-testid="import-stock-btn"
+          className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors"
+        >
+          <UploadCloud size={16} /> Import Stock
+        </button>
       </div>
 
       {/* Add Vehicle Modal */}
