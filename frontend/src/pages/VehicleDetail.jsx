@@ -4,8 +4,8 @@ import { ArrowLeft, Plus, Trash2, Edit, CheckCircle, AlertCircle, Clock, QrCode 
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, getJobStyle, EXPENSE_CATEGORIES } from "../utils/helpers";
-import { formatBSDate } from "../utils/nepali-date";
 import { ExpenseModal, JobCardModal, EditVehicleModal, QRLabelModal } from "./VehicleModals";
+import HoverADDate from "../components/HoverADDate";
 
 const DocCard = ({ label, status }) => {
   const s = getDocStyle(status);
@@ -326,8 +326,8 @@ export default function VehicleDetail() {
                 ["Purchase Source", vehicle.purchase_source],
                 ["Purchased From", vehicle.purchase_from || "—"],
                 ["Ownership", `${vehicle.ownership_number}${["st","nd","rd"][vehicle.ownership_number-1]||"th"} Owner`],
-                ["Purchase Date", formatBSDate(vehicle.purchase_date)],
-                ["Sold Date", vehicle.sold_date ? formatBSDate(vehicle.sold_date) : "—"],
+                ["Purchase Date", <HoverADDate date={vehicle.purchase_date} />],
+                ["Sold Date", vehicle.sold_date ? <HoverADDate date={vehicle.sold_date} /> : "—"],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between py-2 border-b border-slate-50">
                   <span className="text-sm text-slate-500">{k}</span>

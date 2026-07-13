@@ -4,8 +4,8 @@ import { Plus, Search, Eye, Trash2, Filter, X, UploadCloud } from "lucide-react"
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getAgingStyle, getStatusStyle, BRANDS } from "../utils/helpers";
-import { formatBSDate } from "../utils/nepali-date";
 import { AddVehicleModal } from "./AddVehicleModal";
+import HoverADDate from "../components/HoverADDate";
 
 const STATUSES = ["all", "available", "sold", "reserved"];
 
@@ -239,7 +239,7 @@ export default function Inventory() {
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700 whitespace-nowrap">{v.year} · {v.engine_cc}cc</td>
                       <td className="px-4 py-3 text-sm font-mono text-slate-600">{v.registration_number || "—"}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">{formatBSDate(v.purchase_date)}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap"><HoverADDate date={v.purchase_date} /></td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${ag.bg} ${ag.text}`}>
                           {v.aging?.days}d · {ag.label}
