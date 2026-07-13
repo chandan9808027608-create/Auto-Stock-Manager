@@ -104,7 +104,7 @@ export function AddVehicleModal({ form, setForm, onClose, onSubmit, saving, phot
                 className={inp}
               />
             </Field>
-            <Field label="Purchase Date" required full>
+            <Field label="Purchase Date (BS)" required full>
               <BSDatePicker
                 data-testid="purchase-date-input"
                 value={form.purchase_date}
