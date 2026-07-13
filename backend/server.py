@@ -8,8 +8,9 @@ from passlib.context import CryptContext
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-import os, logging, jwt, uuid, json, base64
+import os, logging, jwt, uuid, json, base64, io
 from pydantic import BaseModel
+from PIL import Image, ImageOps
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1304,6 +1305,23 @@ app.add_middleware(CORSMiddleware, allow_credentials=True,
 # ══════════════════════════════════════════════════════════════════════
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_PHOTO_SIZE = 5 * 1024 * 1024  # 5 MB
+PHOTO_MAX_DIMENSION = 1600  # px, longest side
+PHOTO_JPEG_QUALITY = 80
+
+def _compress_photo(content: bytes) -> tuple[bytes, str]:
+    """Downscales and re-encodes an uploaded photo as JPEG. Raw phone-camera
+    uploads were routinely 2-3MB+, which meant next/image on the storefront
+    had to download the full original from Render on every cache miss just
+    to produce a ~30KB resized thumbnail — this is why the storefront felt
+    slow. Compressing once at upload time fixes it for every consumer."""
+    img = Image.open(io.BytesIO(content))
+    img = ImageOps.exif_transpose(img)  # respect phone camera orientation before resizing
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+    img.thumbnail((PHOTO_MAX_DIMENSION, PHOTO_MAX_DIMENSION), Image.LANCZOS)
+    out = io.BytesIO()
+    img.save(out, format="JPEG", quality=PHOTO_JPEG_QUALITY, optimize=True)
+    return out.getvalue(), "image/jpeg"
 
 def _photo_out(p: dict) -> dict:
     return {"id": p["id"], "filename": p["filename"], "uploaded_at": p["uploaded_at"],
@@ -1316,6 +1334,29 @@ async def get_vehicle_photos(vid: str, cu: dict = Depends(get_current_user)):
     photos = await db.vehicle_photos.find({"vehicle_id": vid}, {"_id": 0}).sort("uploaded_at", 1).to_list(200)
     return [_photo_out(p) for p in photos]
 
+@api_router.post("/admin/backfill-compress-photos")
+async def backfill_compress_photos(cu: dict = Depends(get_current_user)):
+    """One-off migration: recompresses vehicle_photos uploaded before
+    server-side compression existed. Safe to call repeatedly — skips photos
+    already stored as compressed JPEG. Remove this route once run."""
+    results = []
+    async for p in db.vehicle_photos.find({}):
+        if p.get("content_type") == "image/jpeg" and p.get("size", 0) < 500_000:
+            continue  # already compressed
+        raw = base64.b64decode(p["data"])
+        try:
+            compressed, content_type = _compress_photo(raw)
+        except Exception as e:
+            results.append({"id": p["id"], "error": str(e)})
+            continue
+        await db.vehicle_photos.update_one(
+            {"id": p["id"]},
+            {"$set": {"data": base64.b64encode(compressed).decode("ascii"),
+                      "content_type": content_type, "size": len(compressed)}},
+        )
+        results.append({"id": p["id"], "before": len(raw), "after": len(compressed)})
+    return {"processed": len(results), "results": results}
+
 @api_router.post("/vehicles/{vid}/photos")
 async def upload_vehicle_photo(vid: str, file: UploadFile = File(...), cu: dict = Depends(get_current_user)):
     v = await db.vehicles.find_one({"id": vid})
@@ -1325,10 +1366,15 @@ async def upload_vehicle_photo(vid: str, file: UploadFile = File(...), cu: dict 
     content = await file.read()
     if len(content) > MAX_PHOTO_SIZE:
         raise HTTPException(400, "File too large. Max 5MB.")
+    content_type = file.content_type
+    try:
+        content, content_type = _compress_photo(content)
+    except Exception:
+        logger.warning(f"Photo compression failed for upload to vehicle {vid}, storing original", exc_info=True)
     photo_id = str(uuid.uuid4())
     photo = {
         "id": photo_id, "vehicle_id": vid, "filename": file.filename or f"{photo_id}.jpg",
-        "content_type": file.content_type, "data": base64.b64encode(content).decode("ascii"),
+        "content_type": content_type, "data": base64.b64encode(content).decode("ascii"),
         "uploaded_at": datetime.now(timezone.utc).isoformat(), "size": len(content),
     }
     await db.vehicle_photos.insert_one(photo)
