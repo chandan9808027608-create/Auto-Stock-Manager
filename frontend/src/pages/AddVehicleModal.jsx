@@ -80,6 +80,12 @@ export function AddVehicleModal({ form, setForm, onClose, onSubmit, saving, phot
                 {FUEL_TYPES.map(f => <option key={f}>{f}</option>)}
               </select>
             </Field>
+            <Field label="Type" required>
+              <select data-testid="vehicle-type-select" value={form.vehicle_type} onChange={e => setForm({ ...form, vehicle_type: e.target.value })} className={sel}>
+                <option value="bike">Bike</option>
+                <option value="scooter">Scooter</option>
+              </select>
+            </Field>
             <Field label="Ownership Number">
               <select value={form.ownership_number} onChange={e => setForm({ ...form, ownership_number: Number(e.target.value) })} className={sel}>
                 {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}{["st", "nd", "rd"][n - 1] || "th"} Owner</option>)}

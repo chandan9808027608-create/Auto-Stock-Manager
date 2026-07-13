@@ -1,6 +1,6 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -170,6 +170,7 @@ class VehicleCreate(BaseModel):
     variant: Optional[str] = None
     year: int; engine_cc: int
     fuel_type: str = "Petrol"
+    vehicle_type: str = "bike"  # "bike" | "scooter" — drives hamroauto.com.np's type filter
     ownership_number: int = 1
     chassis_number: Optional[str] = None
     engine_number: Optional[str] = None
@@ -197,6 +198,7 @@ class VehicleUpdate(BaseModel):
     brand: Optional[str] = None; model: Optional[str] = None
     variant: Optional[str] = None; year: Optional[int] = None
     engine_cc: Optional[int] = None; fuel_type: Optional[str] = None
+    vehicle_type: Optional[str] = None
     ownership_number: Optional[int] = None
     chassis_number: Optional[str] = None; engine_number: Optional[str] = None
     kilometer_run: Optional[int] = None
@@ -1497,9 +1499,11 @@ async def push_to_website(cu: dict = Depends(get_current_user)):
 def _public_vehicle_fields(v: dict) -> dict:
     return {
         "id": v.get("id"),
+        "title": f"{v.get('brand', '')} {v.get('model', '')} {v.get('year', '')}".strip(),
         "brand": v.get("brand"),
         "model": v.get("model"),
         "variant": v.get("variant"),
+        "type": v.get("vehicle_type", "bike"),
         "year": v.get("year"),
         "engine_cc": v.get("engine_cc"),
         "fuel_type": v.get("fuel_type"),
@@ -1510,31 +1514,48 @@ def _public_vehicle_fields(v: dict) -> dict:
         "color": v.get("color"),
         "registration_number": v.get("registration_number"),
         "price": v.get("selling_price"),
+        "status": "available",
+        "created_at": v.get("created_at"),
     }
 
+def _public_photo_url(request: Request, vid: str, photo_id: str) -> str:
+    return f"{request.base_url}api/public/vehicles/{vid}/photos/{photo_id}"
+
 @api_router.get("/public/vehicles")
-async def public_list_vehicles():
+async def public_list_vehicles(request: Request):
     """Public, unauthenticated listing of available vehicles for an external shop frontend.
-    Returns one cover photo per vehicle (the first uploaded) to keep the payload light —
+    Returns one cover photo URL per vehicle (the first uploaded) to keep the payload light —
     use /public/vehicles/{id} for the full photo gallery of a single vehicle."""
     vehicles = await db.vehicles.find({"status": "available"}, {"_id": 0}).sort("created_at", -1).to_list(200)
     out = []
     for v in vehicles:
         item = _public_vehicle_fields(v)
         cover = await db.vehicle_photos.find_one({"vehicle_id": v["id"]}, {"_id": 0}, sort=[("uploaded_at", 1)])
-        item["cover_photo"] = f"data:{cover['content_type']};base64,{cover['data']}" if cover else None
+        item["cover_photo"] = _public_photo_url(request, v["id"], cover["id"]) if cover else None
+        item["image_urls"] = [item["cover_photo"]] if cover else []
         out.append(item)
     return {"count": len(out), "vehicles": out}
 
 @api_router.get("/public/vehicles/{vid}")
-async def public_get_vehicle(vid: str):
+async def public_get_vehicle(vid: str, request: Request):
     """Public, unauthenticated single-vehicle detail with the full photo gallery."""
     v = await db.vehicles.find_one({"id": vid, "status": "available"}, {"_id": 0})
     if not v: raise HTTPException(404, "Vehicle not found or not available")
     item = _public_vehicle_fields(v)
     photos = await db.vehicle_photos.find({"vehicle_id": vid}, {"_id": 0}).sort("uploaded_at", 1).to_list(50)
-    item["photos"] = [f"data:{p['content_type']};base64,{p['data']}" for p in photos]
+    item["image_urls"] = [_public_photo_url(request, vid, p["id"]) for p in photos]
+    item["photos"] = item["image_urls"]  # kept for backwards compatibility with earlier consumers
     return item
+
+@api_router.get("/public/vehicles/{vid}/photos/{photo_id}")
+async def public_get_photo(vid: str, photo_id: str):
+    """Serves a single vehicle photo as a real image response (not JSON) — this gives
+    hamroauto.com.np (or any consumer) a stable HTTPS URL per photo, so it can be added
+    to an image-CDN allowlist (e.g. Next.js next/image remotePatterns) instead of having
+    to handle inline base64 data URIs."""
+    p = await db.vehicle_photos.find_one({"id": photo_id, "vehicle_id": vid}, {"_id": 0})
+    if not p: raise HTTPException(404, "Photo not found")
+    return Response(content=base64.b64decode(p["data"]), media_type=p["content_type"])
 
 @app.on_event("shutdown")
 async def shutdown(): client.close()

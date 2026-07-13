@@ -135,6 +135,13 @@ export function EditVehicleModal({ onClose, onSubmit, form, setForm, saving }) {
                 {CONDITIONS.map(c => <option key={c}>{c}</option>)}
               </select>
             </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Type</label>
+              <select data-testid="edit-vehicle-type-select" value={form.vehicle_type || "bike"} onChange={e => setForm({ ...form, vehicle_type: e.target.value })} className={sel}>
+                <option value="bike">Bike</option>
+                <option value="scooter">Scooter</option>
+              </select>
+            </div>
           </div>
           <div className="border-t border-slate-100 pt-4">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Documents</p>
