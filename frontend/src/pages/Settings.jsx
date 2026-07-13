@@ -1,12 +1,38 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
+
+const SITE_FIELDS = [
+  ["Business Name", "business_name", "text"],
+  ["Contact Phone", "contact_phone", "tel"],
+  ["Contact Email", "contact_email", "email"],
+  ["Address", "address", "text"],
+  ["Logo Image URL", "logo_url", "url"],
+  ["Hero Image URL", "hero_image_url", "url"],
+  ["Service Section Image URL", "service_image_url", "url"],
+];
 
 export default function Settings() {
   const { user, logout } = useAuth();
   const [pwForm, setPwForm] = useState({ current_password: "", new_password: "", confirm: "" });
   const [saving, setSaving] = useState(false);
+  const [siteForm, setSiteForm] = useState(null);
+  const [savingSite, setSavingSite] = useState(false);
+
+  useEffect(() => {
+    api.get("/settings").then(r => setSiteForm(r.data || {})).catch(() => toast.error("Failed to load storefront settings"));
+  }, []);
+
+  const saveSiteSettings = async (e) => {
+    e.preventDefault();
+    setSavingSite(true);
+    try {
+      const r = await api.put("/settings", siteForm);
+      setSiteForm(r.data);
+      toast.success("Storefront settings updated!");
+    } catch { toast.error("Failed to save"); } finally { setSavingSite(false); }
+  };
 
   const changePassword = async (e) => {
     e.preventDefault();
@@ -44,6 +70,33 @@ export default function Settings() {
             <div className="text-sm text-slate-500">@{user?.username} · {user?.role}</div>
           </div>
         </div>
+      </div>
+
+      {/* Storefront Settings */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <h2 className="text-base font-bold text-slate-900 mb-1" style={{ fontFamily: "Manrope" }}>Storefront Settings</h2>
+        <p className="text-xs text-slate-500 mb-4">Branding and contact info shown on the public website (hamroauto.com.np)</p>
+        {!siteForm ? (
+          <div className="flex items-center justify-center h-24"><div className="animate-spin w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full" /></div>
+        ) : (
+          <form onSubmit={saveSiteSettings} className="space-y-4">
+            {SITE_FIELDS.map(([label, key, type]) => (
+              <div key={key}>
+                <label className="block text-xs font-medium text-slate-600 mb-1.5">{label}</label>
+                <input
+                  type={type}
+                  value={siteForm[key] || ""}
+                  onChange={e => setSiteForm({ ...siteForm, [key]: e.target.value })}
+                  className={inp}
+                  data-testid={`site-${key}`}
+                />
+              </div>
+            ))}
+            <button type="submit" disabled={savingSite} data-testid="save-site-settings-btn" className="h-10 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 transition-all active:scale-95">
+              {savingSite ? "Saving..." : "Save Storefront Settings"}
+            </button>
+          </form>
+        )}
       </div>
 
       {/* Change Password */}

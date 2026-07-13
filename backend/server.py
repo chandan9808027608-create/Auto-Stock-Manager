@@ -314,6 +314,24 @@ class EMIPaymentCreate(BaseModel):
     payment_date: Optional[str] = None
     notes: Optional[str] = None
 
+class LeadCreate(BaseModel):
+    type: str  # "sell" | "exchange" | "service"
+    name: str; phone: str
+    message: Optional[str] = None
+    images: Optional[List[str]] = None
+
+class LeadUpdate(BaseModel):
+    status: str  # "new" | "contacted" | "closed"
+
+class SettingsUpdate(BaseModel):
+    logo_url: Optional[str] = None
+    business_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    address: Optional[str] = None
+    hero_image_url: Optional[str] = None
+    service_image_url: Optional[str] = None
+
 # ── AUTH ──────────────────────────────────────────────────────────────
 @api_router.post("/auth/login")
 async def login(req: LoginRequest):
@@ -1215,6 +1233,35 @@ async def get_audit_logs(cu: dict = Depends(get_current_user)):
     logs = await db.audit_logs.find({}, {"_id": 0}).sort("timestamp", -1).to_list(200)
     return logs
 
+# ── LEADS (storefront Sell / Exchange / Book Service submissions) ─────
+@api_router.get("/leads")
+async def get_leads(cu: dict = Depends(get_current_user)):
+    return await db.leads.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+
+@api_router.put("/leads/{lid}")
+async def update_lead(lid: str, lead: LeadUpdate, cu: dict = Depends(get_current_user)):
+    r = await db.leads.update_one({"id": lid}, {"$set": {"status": lead.status}})
+    if r.matched_count == 0: raise HTTPException(404, "Lead not found")
+    return await db.leads.find_one({"id": lid}, {"_id": 0})
+
+@api_router.delete("/leads/{lid}")
+async def delete_lead(lid: str, cu: dict = Depends(get_current_user)):
+    r = await db.leads.delete_one({"id": lid})
+    if r.deleted_count == 0: raise HTTPException(404, "Lead not found")
+    return {"message": "Deleted"}
+
+# ── SETTINGS (storefront branding/contact info) ────────────────────────
+@api_router.get("/settings")
+async def get_settings(cu: dict = Depends(get_current_user)):
+    s = await db.settings.find_one({"id": "general"}, {"_id": 0})
+    return s or {}
+
+@api_router.put("/settings")
+async def update_settings(settings: SettingsUpdate, cu: dict = Depends(get_current_user)):
+    updates = {k: v for k, v in settings.model_dump().items() if v is not None}
+    await db.settings.update_one({"id": "general"}, {"$set": updates}, upsert=True)
+    return await db.settings.find_one({"id": "general"}, {"_id": 0})
+
 # ── STARTUP ───────────────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup():
@@ -1232,6 +1279,17 @@ async def startup():
             {"id": str(uuid.uuid4()), "name": "Partner B", "capital_contribution": 500000, "stake_percentage": 33.33, "contact": "", "created_at": now},
             {"id": str(uuid.uuid4()), "name": "You (Owner)", "capital_contribution": 500000, "stake_percentage": 33.34, "contact": "", "created_at": now},
         ])
+    if not await db.settings.find_one({"id": "general"}):
+        await db.settings.insert_one({
+            "id": "general",
+            "logo_url": "https://images.unsplash.com/photo-1777288411485-1eb05bd4a289?q=80&w=880&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+            "business_name": "G&G AUTO Enterprises",
+            "contact_phone": "9860087161",
+            "contact_email": "info@ggautonp.com",
+            "address": "Nayabasti, Boudha",
+            "hero_image_url": "https://images.unsplash.com/photo-1622185135505-2d795003994a?q=80&w=1470&auto=format&fit=crop",
+            "service_image_url": "",
+        })
 
 app.add_middleware(CORSMiddleware, allow_credentials=True,
                    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
@@ -1556,6 +1614,24 @@ async def public_get_photo(vid: str, photo_id: str):
     p = await db.vehicle_photos.find_one({"id": photo_id, "vehicle_id": vid}, {"_id": 0})
     if not p: raise HTTPException(404, "Photo not found")
     return Response(content=base64.b64decode(p["data"]), media_type=p["content_type"])
+
+@api_router.get("/public/settings")
+async def public_get_settings():
+    """Public, unauthenticated site branding/contact info for the storefront."""
+    s = await db.settings.find_one({"id": "general"}, {"_id": 0, "id": 0})
+    return s or {}
+
+@api_router.post("/public/leads")
+async def public_create_lead(lead: LeadCreate):
+    """Public, unauthenticated — Sell / Exchange / Book Service form submissions
+    from the storefront. Reviewed and managed from the admin Leads screen."""
+    l = lead.model_dump()
+    l["id"] = str(uuid.uuid4())
+    l["status"] = "new"
+    l["created_at"] = datetime.now(timezone.utc).isoformat()
+    await db.leads.insert_one(l)
+    l.pop("_id", None)
+    return l
 
 @app.on_event("shutdown")
 async def shutdown(): client.close()
