@@ -1456,6 +1456,7 @@ async def export_for_website(cu: dict = Depends(get_current_user)):
     vehicles = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(200)
     listings = []
     for v in vehicles:
+        photos = await db.vehicle_photos.find({"vehicle_id": v["id"]}, {"_id": 0}).sort("uploaded_at", 1).to_list(50)
         listings.append({
             "title": f"{v.get('brand')} {v.get('model')} {v.get('year')}",
             "brand": v.get("brand"), "model": v.get("model"), "year": v.get("year"),
@@ -1468,7 +1469,7 @@ async def export_for_website(cu: dict = Depends(get_current_user)):
                 "bluebook": v.get("bluebook_status"), "insurance": v.get("insurance_status"),
                 "tax": v.get("tax_clearance_status"), "transfer": v.get("transfer_status"),
             },
-            "photos": [p["url"] for p in v.get("photos", [])],
+            "photos": [f"data:{p['content_type']};base64,{p['data']}" for p in photos],
             "contact": "Hamro G&G Auto · Kathmandu · 98XXXXXXXX",
             "source": "hamro_gng_auto",
             "exported_at": datetime.now(timezone.utc).isoformat(),
@@ -1484,6 +1485,56 @@ async def push_to_website(cu: dict = Depends(get_current_user)):
     await db.sync_logs.insert_one({**sync_log, "id": str(uuid.uuid4())})
     sync_log.pop("_id", None)
     return sync_log
+
+# ══════════════════════════════════════════════════════════════════════
+# ── PUBLIC SHOP API (no auth — safe for an external storefront site) ──
+# Read-only. Only ever returns the explicit allowlist below — never spread
+# a raw vehicle dict here. Fields intentionally EXCLUDED as internal/
+# sensitive: purchase_price, accessories_cost, minimum_selling_price,
+# vendor_id, purchase_from, purchase_source, chassis_number, engine_number,
+# customer_id, salesperson_id/name, discount, notes, created_by/at.
+# ══════════════════════════════════════════════════════════════════════
+def _public_vehicle_fields(v: dict) -> dict:
+    return {
+        "id": v.get("id"),
+        "brand": v.get("brand"),
+        "model": v.get("model"),
+        "variant": v.get("variant"),
+        "year": v.get("year"),
+        "engine_cc": v.get("engine_cc"),
+        "fuel_type": v.get("fuel_type"),
+        "ownership_number": v.get("ownership_number"),
+        "kilometer_run": v.get("kilometer_run"),
+        "condition": v.get("condition"),
+        "condition_rating": v.get("condition_rating"),
+        "color": v.get("color"),
+        "registration_number": v.get("registration_number"),
+        "price": v.get("selling_price"),
+    }
+
+@api_router.get("/public/vehicles")
+async def public_list_vehicles():
+    """Public, unauthenticated listing of available vehicles for an external shop frontend.
+    Returns one cover photo per vehicle (the first uploaded) to keep the payload light —
+    use /public/vehicles/{id} for the full photo gallery of a single vehicle."""
+    vehicles = await db.vehicles.find({"status": "available"}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    out = []
+    for v in vehicles:
+        item = _public_vehicle_fields(v)
+        cover = await db.vehicle_photos.find_one({"vehicle_id": v["id"]}, {"_id": 0}, sort=[("uploaded_at", 1)])
+        item["cover_photo"] = f"data:{cover['content_type']};base64,{cover['data']}" if cover else None
+        out.append(item)
+    return {"count": len(out), "vehicles": out}
+
+@api_router.get("/public/vehicles/{vid}")
+async def public_get_vehicle(vid: str):
+    """Public, unauthenticated single-vehicle detail with the full photo gallery."""
+    v = await db.vehicles.find_one({"id": vid, "status": "available"}, {"_id": 0})
+    if not v: raise HTTPException(404, "Vehicle not found or not available")
+    item = _public_vehicle_fields(v)
+    photos = await db.vehicle_photos.find({"vehicle_id": vid}, {"_id": 0}).sort("uploaded_at", 1).to_list(50)
+    item["photos"] = [f"data:{p['content_type']};base64,{p['data']}" for p in photos]
+    return item
 
 @app.on_event("shutdown")
 async def shutdown(): client.close()
