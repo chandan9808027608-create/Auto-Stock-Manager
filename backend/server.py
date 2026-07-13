@@ -1334,29 +1334,6 @@ async def get_vehicle_photos(vid: str, cu: dict = Depends(get_current_user)):
     photos = await db.vehicle_photos.find({"vehicle_id": vid}, {"_id": 0}).sort("uploaded_at", 1).to_list(200)
     return [_photo_out(p) for p in photos]
 
-@api_router.post("/admin/backfill-compress-photos")
-async def backfill_compress_photos(cu: dict = Depends(get_current_user)):
-    """One-off migration: recompresses vehicle_photos uploaded before
-    server-side compression existed. Safe to call repeatedly — skips photos
-    already stored as compressed JPEG. Remove this route once run."""
-    results = []
-    async for p in db.vehicle_photos.find({}):
-        if p.get("content_type") == "image/jpeg" and p.get("size", 0) < 500_000:
-            continue  # already compressed
-        raw = base64.b64decode(p["data"])
-        try:
-            compressed, content_type = _compress_photo(raw)
-        except Exception as e:
-            results.append({"id": p["id"], "error": str(e)})
-            continue
-        await db.vehicle_photos.update_one(
-            {"id": p["id"]},
-            {"$set": {"data": base64.b64encode(compressed).decode("ascii"),
-                      "content_type": content_type, "size": len(compressed)}},
-        )
-        results.append({"id": p["id"], "before": len(raw), "after": len(compressed)})
-    return {"processed": len(results), "results": results}
-
 @api_router.post("/vehicles/{vid}/photos")
 async def upload_vehicle_photo(vid: str, file: UploadFile = File(...), cu: dict = Depends(get_current_user)):
     v = await db.vehicles.find_one({"id": vid})
