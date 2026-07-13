@@ -177,7 +177,7 @@ class VehicleCreate(BaseModel):
     condition: str = "Good"
     condition_rating: int = 7
     color: Optional[str] = None
-    registration_number: Optional[str] = None
+    registration_number: str
     purchase_price: float
     accessories_cost: float = 0
     purchase_date: str
@@ -402,7 +402,7 @@ async def create_vehicle(vehicle: VehicleCreate, cu: dict = Depends(get_current_
     return v
 
 # ── Bulk Import (xlsx/csv) ─────────────────────────────────────────────
-IMPORT_REQUIRED_FIELDS = ["brand", "model", "year", "purchase_price", "purchase_date", "purchase_source"]
+IMPORT_REQUIRED_FIELDS = ["brand", "model", "year", "purchase_price", "purchase_date", "purchase_source", "registration_number"]
 
 def _import_cell_str(record: dict, key: str) -> Optional[str]:
     val = record.get(key)

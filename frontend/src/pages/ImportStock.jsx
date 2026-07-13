@@ -3,10 +3,10 @@ import { UploadCloud, FileSpreadsheet, CheckCircle2, AlertTriangle, X } from "lu
 import { toast } from "sonner";
 import api from "../utils/api";
 
-const REQUIRED_COLUMNS = ["brand", "model", "year", "purchase_price", "purchase_date", "purchase_source"];
+const REQUIRED_COLUMNS = ["brand", "model", "year", "purchase_price", "purchase_date", "purchase_source", "registration_number"];
 const OPTIONAL_COLUMNS = [
   "variant", "engine_cc", "fuel_type", "ownership_number", "chassis_number", "engine_number",
-  "kilometer_run", "condition", "condition_rating", "color", "registration_number",
+  "kilometer_run", "condition", "condition_rating", "color",
   "accessories_cost", "purchase_from", "selling_price", "minimum_selling_price", "notes",
 ];
 

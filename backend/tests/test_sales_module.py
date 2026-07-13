@@ -33,7 +33,7 @@ def available_vehicle(auth):
         "brand": "TEST_Honda", "model": "TEST_Activa", "year": 2022,
         "engine_cc": 110, "purchase_price": 150000,
         "purchase_date": "2024-01-01", "purchase_source": "Individual",
-        "selling_price": 180000
+        "selling_price": 180000, "registration_number": "TEST-SALES-001"
     })
     assert v.status_code == 200
     return v.json()

@@ -130,8 +130,9 @@ export function AddVehicleModal({ form, setForm, onClose, onSubmit, saving, phot
                 {CONDITIONS.map(c => <option key={c}>{c}</option>)}
               </select>
             </Field>
-            <Field label="Registration Number">
+            <Field label="Registration Number" required>
               <input
+                data-testid="registration-number-input"
                 value={form.registration_number}
                 onChange={e => setForm({ ...form, registration_number: e.target.value })}
                 placeholder="e.g. Ba 1 Pa 1234"

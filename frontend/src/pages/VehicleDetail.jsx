@@ -92,6 +92,7 @@ export default function VehicleDetail() {
 
   const saveEdit = async (e) => {
     e.preventDefault();
+    if (!editForm.registration_number) { toast.error("Registration Number is required"); return; }
     setSaving(true);
     try {
       await api.put(`/vehicles/${id}`, { ...editForm, purchase_price: Number(editForm.purchase_price), selling_price: editForm.selling_price ? Number(editForm.selling_price) : null, year: Number(editForm.year), engine_cc: Number(editForm.engine_cc), ownership_number: Number(editForm.ownership_number) });

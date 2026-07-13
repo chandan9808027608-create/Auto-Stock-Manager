@@ -27,6 +27,7 @@ def test_vehicle_id(client):
         "fuel_type": "Petrol", "ownership_number": 1,
         "purchase_price": 150000, "purchase_date": "2026-05-29",
         "purchase_source": "Individual", "condition": "Good",
+        "registration_number": "TEST-BSFEAT-001",
         "status": "available",
         "bluebook_status": "pending", "insurance_status": "pending",
         "tax_clearance_status": "pending", "transfer_status": "pending"

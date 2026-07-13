@@ -112,6 +112,16 @@ export function EditVehicleModal({ onClose, onSubmit, form, setForm, saving }) {
               </div>
             ))}
             <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Registration Number<span className="text-red-500 ml-0.5">*</span></label>
+              <input
+                data-testid="edit-registration-number-input"
+                value={form.registration_number || ""}
+                onChange={e => setForm({ ...form, registration_number: e.target.value })}
+                placeholder="e.g. Ba 1 Pa 1234"
+                className={inp}
+              />
+            </div>
+            <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
               <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className={sel}>
                 <option value="available">Available</option>

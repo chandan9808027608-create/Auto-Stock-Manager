@@ -75,7 +75,7 @@ export default function Inventory() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!form.brand || !form.model || !form.purchase_price || !form.purchase_date || !form.purchase_source) {
+    if (!form.brand || !form.model || !form.purchase_price || !form.purchase_date || !form.purchase_source || !form.registration_number) {
       toast.error("Please fill all required fields"); return;
     }
     setSaving(true);

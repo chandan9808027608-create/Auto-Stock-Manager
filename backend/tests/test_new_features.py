@@ -25,7 +25,8 @@ def vehicle_id(auth):
         return r.json()[0]["id"]
     r = auth.post(f"{BASE_URL}/api/vehicles", json={
         "brand": "Honda", "model": "Activa", "year": 2022, "engine_cc": 110,
-        "purchase_price": 100000, "purchase_date": "2024-01-01"
+        "purchase_price": 100000, "purchase_date": "2024-01-01",
+        "purchase_source": "Individual", "registration_number": "TEST-NEWFEAT-001"
     })
     assert r.status_code in [200, 201]
     return r.json()["id"]
