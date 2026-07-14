@@ -3,6 +3,7 @@ import { Plus, Search, Wrench, X, Package } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getJobStyle } from "../utils/helpers";
+import VehicleComboBox from "../components/VehicleComboBox";
 
 const STATUSES = ["all", "pending", "in_progress", "completed"];
 const EMPTY_FORM = { vehicle_id: "", work_description: "", mechanic_name: "", estimated_cost: "", notes: "" };
@@ -23,7 +24,6 @@ export default function JobCards() {
   // Parts linked to the new job
   const [jobParts, setJobParts] = useState([]);
   const [partSearch, setPartSearch] = useState("");
-  const [vehicleSearch, setVehicleSearch] = useState("");
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -63,13 +63,6 @@ export default function JobCards() {
     !jobParts.find(jp => jp.part_id === p.id)
   );
 
-  const filteredVehicles = vehicles.filter(v => {
-    if (v.id === form.vehicle_id) return true;
-    if (!vehicleSearch) return true;
-    const q = vehicleSearch.toLowerCase();
-    return v.brand?.toLowerCase().includes(q) || v.model?.toLowerCase().includes(q) || (v.registration_number || "").toLowerCase().includes(q);
-  });
-
   const addPartToJob = (part) => {
     if (part.quantity <= 0) { toast.error(`${part.name} is out of stock`); return; }
     setJobParts(prev => [...prev, { part_id: part.id, part_name: part.name, quantity: 1, unit_cost: part.unit_cost || 0, available_qty: part.quantity }]);
@@ -85,7 +78,7 @@ export default function JobCards() {
 
   const removePartFromJob = (part_id) => setJobParts(prev => prev.filter(p => p.part_id !== part_id));
 
-  const openModal = () => { setForm(EMPTY_FORM); setJobParts([]); setPartSearch(""); setVehicleSearch(""); setShowModal(true); };
+  const openModal = () => { setForm(EMPTY_FORM); setJobParts([]); setPartSearch(""); setShowModal(true); };
 
   const createJob = async (e) => {
     e.preventDefault();
@@ -123,7 +116,6 @@ export default function JobCards() {
   };
 
   const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
-  const sel = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
 
   const stats = {
     pending: jobs.filter(j => j.status === "pending").length,
@@ -257,26 +249,14 @@ export default function JobCards() {
             <form onSubmit={createJob} className="p-5 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Vehicle <span className="text-red-500">*</span></label>
-                <div className="space-y-1.5">
-                  <div className="relative">
-                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      value={vehicleSearch}
-                      onChange={e => setVehicleSearch(e.target.value)}
-                      placeholder="Search by registration number, brand, model..."
-                      className="w-full h-8 pl-8 pr-3 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      data-testid="job-vehicle-search"
-                    />
-                  </div>
-                  <select value={form.vehicle_id} onChange={e => setForm({...form, vehicle_id: e.target.value})} className={sel} data-testid="job-vehicle-select">
-                    <option value="">Select Vehicle</option>
-                    {filteredVehicles.map(v => (
-                      <option key={v.id} value={v.id}>
-                        {v.brand} {v.model} {v.year} {v.registration_number ? `(${v.registration_number})` : ""}{v.status === "in_repair" ? " — In Repair" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <VehicleComboBox
+                  vehicles={vehicles}
+                  value={form.vehicle_id}
+                  onChange={id => setForm({...form, vehicle_id: id})}
+                  placeholder="Search or select a vehicle..."
+                  testId="job-vehicle"
+                  tagStatus
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Work Description <span className="text-red-500">*</span></label>

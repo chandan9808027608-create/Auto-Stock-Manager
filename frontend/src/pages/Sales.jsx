@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR } from "../utils/helpers";
 import { useAuth } from "../context/AuthContext";
+import VehicleComboBox from "../components/VehicleComboBox";
 
 const PRESET_EXPENSES = [
   { name: "Registration Transfer Fee", amount: 2000 },
@@ -58,7 +59,6 @@ export default function Sales() {
   const [newExpName, setNewExpName] = useState("");
   const [newExpAmt, setNewExpAmt] = useState("");
   const [showPresets, setShowPresets] = useState(true);
-  const [vehicleSearch, setVehicleSearch] = useState("");
 
   const fetchAll = useCallback(async () => {
     try {
@@ -78,7 +78,6 @@ export default function Sales() {
     setNewExpName(""); setNewExpAmt("");
     setShowAddCust(false);
     setNewCust({ name: "", contact_number: "", address: "" });
-    setVehicleSearch("");
     setShowModal(true);
     try {
       const [v, c] = await Promise.all([api.get("/vehicles?status=available"), api.get("/customers")]);
@@ -107,7 +106,6 @@ export default function Sales() {
     setNewExpName(""); setNewExpAmt("");
     setShowAddCust(false);
     setNewCust({ name: "", contact_number: "", address: "" });
-    setVehicleSearch("");
     setShowModal(true);
     try {
       const [v, c] = await Promise.all([api.get("/vehicles"), api.get("/customers")]);
@@ -137,13 +135,6 @@ export default function Sales() {
   const amountDue = Math.max(Number((grandTotal - amountPaid).toFixed(2)), 0);
 
   const availablePresets = PRESET_EXPENSES.filter(p => !expenseItems.some(e => e.name === p.name));
-
-  const filteredVehicles = vehicles.filter(v => {
-    if (v.id === form.vehicle_id) return true;
-    if (!vehicleSearch) return true;
-    const q = vehicleSearch.toLowerCase();
-    return v.brand?.toLowerCase().includes(q) || v.model?.toLowerCase().includes(q) || (v.registration_number || "").toLowerCase().includes(q);
-  });
 
   const addPresetExpense = (name) => {
     const preset = PRESET_EXPENSES.find(p => p.name === name);
@@ -371,26 +362,14 @@ export default function Sales() {
 
               {/* Vehicle */}
               <Field label="Vehicle" required>
-                <div className="space-y-1.5">
-                  <div className="relative">
-                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      value={vehicleSearch}
-                      onChange={e => setVehicleSearch(e.target.value)}
-                      placeholder="Search by registration number, brand, model..."
-                      className="w-full h-8 pl-8 pr-3 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      data-testid="sale-vehicle-search"
-                    />
-                  </div>
-                  <select value={form.vehicle_id} onChange={e => setForm({...form, vehicle_id: e.target.value})} className={sel} data-testid="sale-vehicle-select">
-                    <option value="">Select available vehicle</option>
-                    {filteredVehicles.map(v => (
-                      <option key={v.id} value={v.id}>
-                        {v.brand} {v.model} {v.year} {v.registration_number ? `(${v.registration_number})` : ""} — {formatNPR(v.selling_price || v.purchase_price)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <VehicleComboBox
+                  vehicles={vehicles}
+                  value={form.vehicle_id}
+                  onChange={id => setForm({...form, vehicle_id: id})}
+                  placeholder="Search or select available vehicle..."
+                  testId="sale-vehicle"
+                  showPrice
+                />
               </Field>
 
               {/* Sale Date */}
