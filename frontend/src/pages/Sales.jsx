@@ -139,12 +139,11 @@ export default function Sales() {
   const availablePresets = PRESET_EXPENSES.filter(p => !expenseItems.some(e => e.name === p.name));
 
   const filteredVehicles = vehicles.filter(v => {
-    if (!vehicleSearch) return false;
+    if (v.id === form.vehicle_id) return true;
+    if (!vehicleSearch) return true;
     const q = vehicleSearch.toLowerCase();
     return v.brand?.toLowerCase().includes(q) || v.model?.toLowerCase().includes(q) || (v.registration_number || "").toLowerCase().includes(q);
   });
-
-  const selectedVehicle = vehicles.find(v => v.id === form.vehicle_id);
 
   const addPresetExpense = (name) => {
     const preset = PRESET_EXPENSES.find(p => p.name === name);
@@ -372,36 +371,26 @@ export default function Sales() {
 
               {/* Vehicle */}
               <Field label="Vehicle" required>
-                {selectedVehicle ? (
-                  <div className="flex items-center justify-between h-9 px-3 text-sm border border-slate-200 rounded-lg bg-slate-50" data-testid="sale-vehicle-selected">
-                    <span className="truncate">{selectedVehicle.brand} {selectedVehicle.model} {selectedVehicle.year} {selectedVehicle.registration_number ? `(${selectedVehicle.registration_number})` : ""} — {formatNPR(selectedVehicle.selling_price || selectedVehicle.purchase_price)}</span>
-                    <button type="button" onClick={() => setForm({...form, vehicle_id: ""})} className="text-slate-400 hover:text-red-500 ml-2 shrink-0"><X size={14} /></button>
-                  </div>
-                ) : (
+                <div className="space-y-1.5">
                   <div className="relative">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       value={vehicleSearch}
                       onChange={e => setVehicleSearch(e.target.value)}
                       placeholder="Search by registration number, brand, model..."
-                      className={inp}
+                      className="w-full h-8 pl-8 pr-3 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       data-testid="sale-vehicle-search"
-                      autoComplete="off"
                     />
-                    {vehicleSearch && (
-                      <div className="absolute left-0 right-0 top-10 z-10 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto" data-testid="sale-vehicle-dropdown">
-                        {filteredVehicles.length === 0 ? (
-                          <div className="px-3 py-2 text-xs text-slate-400">No matching vehicles</div>
-                        ) : filteredVehicles.map(v => (
-                          <button type="button" key={v.id} onClick={() => { setForm({...form, vehicle_id: v.id}); setVehicleSearch(""); }} className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 border-b border-slate-50 last:border-0">
-                            <span className="font-medium text-slate-800">{v.brand} {v.model} {v.year}</span>
-                            {v.registration_number && <span className="text-slate-400 ml-1.5 font-mono">{v.registration_number}</span>}
-                            <span className="block text-slate-500">{formatNPR(v.selling_price || v.purchase_price)}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
-                )}
+                  <select value={form.vehicle_id} onChange={e => setForm({...form, vehicle_id: e.target.value})} className={sel} data-testid="sale-vehicle-select">
+                    <option value="">Select available vehicle</option>
+                    {filteredVehicles.map(v => (
+                      <option key={v.id} value={v.id}>
+                        {v.brand} {v.model} {v.year} {v.registration_number ? `(${v.registration_number})` : ""} — {formatNPR(v.selling_price || v.purchase_price)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </Field>
 
               {/* Sale Date */}
