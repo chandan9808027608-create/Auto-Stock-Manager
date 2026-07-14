@@ -157,7 +157,8 @@ export default function ImportStock() {
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Expected Columns</p>
         <p className="text-sm text-slate-500 mb-3">
           The first row must be a header row. Column names are case-insensitive and spaces are treated as underscores
-          (e.g. &quot;Purchase Price&quot; or &quot;purchase_price&quot; both work). Dates should be <span className="font-mono text-xs bg-slate-100 px-1 py-0.5 rounded">YYYY-MM-DD</span>.
+          (e.g. &quot;Purchase Price&quot; or &quot;purchase_price&quot; both work). Dates can be in most common formats
+          (e.g. <span className="font-mono text-xs bg-slate-100 px-1 py-0.5 rounded">2026-07-14</span>, <span className="font-mono text-xs bg-slate-100 px-1 py-0.5 rounded">14/07/2026</span>, or <span className="font-mono text-xs bg-slate-100 px-1 py-0.5 rounded">14 Jul 2026</span>).
         </p>
         <div className="flex flex-wrap gap-1.5 mb-3">
           {REQUIRED_COLUMNS.map(c => (

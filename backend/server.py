@@ -436,6 +436,27 @@ def _import_cell_num(record: dict, key: str):
     if val is None or str(val).strip() == "": return None
     return float(val)
 
+_IMPORT_DATE_FORMATS = [
+    "%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d",
+    "%d-%m-%Y", "%d/%m/%Y", "%d.%m.%Y",
+    "%m-%d-%Y", "%m/%d/%Y",
+    "%d-%b-%Y", "%d %b %Y", "%d %B %Y",
+    "%b %d, %Y", "%B %d, %Y", "%b %d %Y", "%B %d %Y",
+    "%d-%m-%y", "%d/%m/%y",
+]
+
+def _parse_flexible_date(val) -> str:
+    """Best-effort parse of a free-format date value into YYYY-MM-DD. Falls back to the raw trimmed string if unrecognized."""
+    if isinstance(val, datetime):
+        return val.date().isoformat()
+    s = str(val).strip()
+    for fmt in _IMPORT_DATE_FORMATS:
+        try:
+            return datetime.strptime(s, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return s
+
 @api_router.post("/vehicles/import")
 async def import_vehicles(file: UploadFile = File(...), cu: dict = Depends(get_current_user)):
     filename = (file.filename or "").lower()
@@ -480,8 +501,7 @@ async def import_vehicles(file: UploadFile = File(...), cu: dict = Depends(get_c
             errors.append({"row": sheet_row_num, "reason": f"Missing required field(s): {', '.join(missing)}"})
             continue
         try:
-            purchase_date_val = record.get("purchase_date")
-            purchase_date = purchase_date_val.date().isoformat() if isinstance(purchase_date_val, datetime) else str(purchase_date_val).strip()
+            purchase_date = _parse_flexible_date(record.get("purchase_date"))
             selling_price = _import_cell_num(record, "selling_price")
             min_selling_price = _import_cell_num(record, "minimum_selling_price")
             km_run = _import_cell_num(record, "kilometer_run")
