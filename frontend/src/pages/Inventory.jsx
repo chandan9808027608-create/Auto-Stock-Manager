@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Search, Eye, Trash2, Filter, X, UploadCloud } from "lucide-react";
+import { Plus, Search, Eye, Trash2, Filter, X, UploadCloud, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getAgingStyle, getStatusStyle, BRANDS } from "../utils/helpers";
@@ -30,6 +30,22 @@ export default function Inventory() {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [photos, setPhotos] = useState([]);
+  const [hidingUnpriced, setHidingUnpriced] = useState(false);
+
+  const unpricedVisible = vehicles.filter(v => !v.selling_price && v.status !== "sold" && v.status !== "hidden");
+
+  const hideUnpriced = async () => {
+    if (unpricedVisible.length === 0) return;
+    if (!window.confirm(`Hide ${unpricedVisible.length} vehicle(s) with no selling price from the website?`)) return;
+    setHidingUnpriced(true);
+    try {
+      const results = await Promise.allSettled(unpricedVisible.map(v => api.put(`/vehicles/${v.id}`, { status: "hidden" })));
+      const failed = results.filter(r => r.status === "rejected").length;
+      if (failed > 0) toast.error(`Hid ${results.length - failed} vehicle(s), ${failed} failed`);
+      else toast.success(`Hid ${results.length} vehicle(s) with no selling price`);
+      fetchVehicles();
+    } finally { setHidingUnpriced(false); }
+  };
 
   const clearStagedPhotos = () => {
     photos.forEach(p => URL.revokeObjectURL(p.previewUrl));
@@ -122,13 +138,25 @@ export default function Inventory() {
           <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
           <p className="text-sm text-slate-500">{filtered.length} vehicles found</p>
         </div>
-        <button
-          onClick={() => { setForm(EMPTY); setShowModal(true); }}
-          data-testid="add-vehicle-button"
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-all active:scale-95 shadow-sm"
-        >
-          <Plus size={16} /> Add Vehicle
-        </button>
+        <div className="flex items-center gap-2">
+          {unpricedVisible.length > 0 && (
+            <button
+              onClick={hideUnpriced}
+              disabled={hidingUnpriced}
+              data-testid="hide-unpriced-button"
+              className="flex items-center gap-2 border border-slate-200 text-slate-700 text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-60"
+            >
+              <EyeOff size={16} /> {hidingUnpriced ? "Hiding..." : `Hide ${unpricedVisible.length} With No Price`}
+            </button>
+          )}
+          <button
+            onClick={() => { setForm(EMPTY); setShowModal(true); }}
+            data-testid="add-vehicle-button"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-all active:scale-95 shadow-sm"
+          >
+            <Plus size={16} /> Add Vehicle
+          </button>
+        </div>
       </div>
 
       {/* Active Aging Filter Banner */}
