@@ -110,6 +110,13 @@ export function AddVehicleModal({ form, setForm, onClose, onSubmit, saving, phot
                 className={inp}
               />
             </Field>
+            <Field label="Status">
+              <select data-testid="add-status-select" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className={sel}>
+                <option value="available">Available</option>
+                <option value="reserved">Reserved</option>
+                <option value="sold">Sold</option>
+              </select>
+            </Field>
             <Field label="Purchase Date (BS)" required full>
               <BSDatePicker
                 data-testid="purchase-date-input"
