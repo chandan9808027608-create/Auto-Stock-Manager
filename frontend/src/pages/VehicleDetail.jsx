@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2, Edit, CheckCircle, AlertCircle, Clock, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
-import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, getJobStyle, EXPENSE_CATEGORIES } from "../utils/helpers";
+import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, getJobStyle, EXPENSE_CATEGORIES, VEHICLE_STATUS_OPTIONS } from "../utils/helpers";
 import { ExpenseModal, JobCardModal, EditVehicleModal, QRLabelModal } from "./VehicleModals";
 import HoverADDate from "../components/HoverADDate";
 
@@ -201,10 +201,7 @@ export default function VehicleDetail() {
             data-testid="vehicle-status-select"
             title="Change vehicle status"
           >
-            <option value="hidden">Hidden</option>
-            <option value="available">Available</option>
-            <option value="reserved">Reserved</option>
-            <option value="sold">Sold</option>
+            {VEHICLE_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           <button onClick={() => setShowEditModal(true)} className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors" data-testid="edit-vehicle-btn"><Edit size={14} /> Edit</button>
           <button onClick={loadQR} className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors" data-testid="qr-btn"><QrCode size={14} /> QR Label</button>

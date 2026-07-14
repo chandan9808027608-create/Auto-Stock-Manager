@@ -3,7 +3,7 @@
  * Kept in the same pages/ directory for co-location.
  */
 import { QRCodeSVG } from "qrcode.react";
-import { formatNPR, EXPENSE_CATEGORIES, CONDITIONS, SOURCES, FUEL_TYPES } from "../utils/helpers";
+import { formatNPR, EXPENSE_CATEGORIES, CONDITIONS, SOURCES, FUEL_TYPES, VEHICLE_STATUS_OPTIONS } from "../utils/helpers";
 import BSDatePicker from "../components/BSDatePicker";
 import VendorAutocomplete from "../components/VendorAutocomplete";
 
@@ -126,10 +126,7 @@ export function EditVehicleModal({ onClose, onSubmit, form, setForm, saving }) {
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
               <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className={sel}>
-                <option value="hidden">Hidden (not shown on website)</option>
-                <option value="available">Available</option>
-                <option value="reserved">Reserved</option>
-                <option value="sold">Sold</option>
+                {VEHICLE_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div>

@@ -3,11 +3,11 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Search, Eye, Trash2, Filter, X, UploadCloud, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
-import { formatNPR, getAgingStyle, getStatusStyle, BRANDS } from "../utils/helpers";
+import { formatNPR, getAgingStyle, getStatusStyle, BRANDS, VEHICLE_STATUS_OPTIONS } from "../utils/helpers";
 import { AddVehicleModal } from "./AddVehicleModal";
 import HoverADDate from "../components/HoverADDate";
 
-const STATUSES = ["all", "hidden", "available", "sold", "reserved"];
+const STATUSES = ["all", ...VEHICLE_STATUS_OPTIONS.map(o => o.value)];
 
 const EMPTY = {
   brand: "", model: "", year: new Date().getFullYear(), engine_cc: 125, fuel_type: "Petrol", vehicle_type: "bike",
@@ -32,7 +32,7 @@ export default function Inventory() {
   const [photos, setPhotos] = useState([]);
   const [hidingUnpriced, setHidingUnpriced] = useState(false);
 
-  const unpricedVisible = vehicles.filter(v => !v.selling_price && v.status !== "sold" && v.status !== "hidden");
+  const unpricedVisible = vehicles.filter(v => !v.selling_price && !["sold", "hidden", "scrap", "in_repair"].includes(v.status));
 
   const hideUnpriced = async () => {
     if (unpricedVisible.length === 0) return;
@@ -196,7 +196,7 @@ export default function Inventory() {
             className="h-9 px-3 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             {STATUSES.map(s => (
-              <option key={s} value={s}>{s === "all" ? "All Status" : s.charAt(0).toUpperCase() + s.slice(1)}</option>
+              <option key={s} value={s}>{s === "all" ? "All Status" : getStatusStyle(s).label}</option>
             ))}
           </select>
           <select

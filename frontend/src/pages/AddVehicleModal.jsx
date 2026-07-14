@@ -4,7 +4,7 @@
 import { Plus } from "lucide-react";
 import BSDatePicker from "../components/BSDatePicker";
 import VendorAutocomplete from "../components/VendorAutocomplete";
-import { BRANDS, SOURCES, CONDITIONS, FUEL_TYPES } from "../utils/helpers";
+import { BRANDS, SOURCES, CONDITIONS, FUEL_TYPES, VEHICLE_STATUS_OPTIONS } from "../utils/helpers";
 
 const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
 const sel = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
@@ -112,10 +112,7 @@ export function AddVehicleModal({ form, setForm, onClose, onSubmit, saving, phot
             </Field>
             <Field label="Status">
               <select data-testid="add-status-select" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className={sel}>
-                <option value="hidden">Hidden (not shown on website)</option>
-                <option value="available">Available</option>
-                <option value="reserved">Reserved</option>
-                <option value="sold">Sold</option>
+                {VEHICLE_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </Field>
             <Field label="Purchase Date (BS)" required full>

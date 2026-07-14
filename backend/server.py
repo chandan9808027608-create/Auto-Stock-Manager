@@ -506,7 +506,7 @@ async def import_vehicles(file: UploadFile = File(...), cu: dict = Depends(get_c
             min_selling_price = _import_cell_num(record, "minimum_selling_price")
             km_run = _import_cell_num(record, "kilometer_run")
             status_val = (_import_cell_str(record, "status") or "available").lower()
-            if status_val not in ("available", "reserved", "sold", "hidden"):
+            if status_val not in ("available", "reserved", "sold", "hidden", "scrap", "in_repair"):
                 status_val = "available"
             doc = {
                 "id": str(uuid.uuid4()),

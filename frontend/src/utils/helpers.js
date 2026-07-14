@@ -16,12 +16,23 @@ export const getAgingStyle = (category) => {
 export const getStatusStyle = (status) => {
   const map = {
     hidden:    { bg: "bg-slate-200",  text: "text-slate-700",  label: "Hidden" },
+    scrap:     { bg: "bg-red-100",    text: "text-red-800",    label: "Scrap" },
+    in_repair: { bg: "bg-purple-100", text: "text-purple-800", label: "In Repair" },
     available: { bg: "bg-blue-100",   text: "text-blue-800",   label: "Available" },
     sold:      { bg: "bg-green-100",  text: "text-green-800",  label: "Sold" },
     reserved:  { bg: "bg-yellow-100", text: "text-yellow-800", label: "Reserved" },
   };
   return map[status] || map.available;
 };
+
+export const VEHICLE_STATUS_OPTIONS = [
+  { value: "hidden", label: "Hidden" },
+  { value: "scrap", label: "Scrap" },
+  { value: "in_repair", label: "In Repair" },
+  { value: "available", label: "Available" },
+  { value: "reserved", label: "Reserved" },
+  { value: "sold", label: "Sold" },
+];
 
 export const getJobStyle = (status) => {
   const map = {
