@@ -189,7 +189,7 @@ class VehicleCreate(BaseModel):
     selling_price: Optional[float] = None
     minimum_selling_price: Optional[float] = None
     notes: Optional[str] = None
-    status: str = "hidden"
+    status: str = "unlisted"
     bluebook_status: str = "pending"
     insurance_status: str = "pending"
     tax_clearance_status: str = "pending"
@@ -508,7 +508,9 @@ async def import_vehicles(file: UploadFile = File(...), cu: dict = Depends(get_c
             min_selling_price = _import_cell_num(record, "minimum_selling_price")
             km_run = _import_cell_num(record, "kilometer_run")
             status_val = (_import_cell_str(record, "status") or "available").lower()
-            if status_val not in ("available", "reserved", "sold", "hidden", "scrap", "in_repair"):
+            if status_val == "hidden":
+                status_val = "unlisted"  # legacy alias, pre-rename data
+            if status_val not in ("available", "reserved", "sold", "unlisted", "scrap", "in_repair"):
                 status_val = "available"
             doc = {
                 "id": str(uuid.uuid4()),

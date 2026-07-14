@@ -12,7 +12,7 @@ const STATUSES = ["all", ...VEHICLE_STATUS_OPTIONS.map(o => o.value)];
 const EMPTY = {
   brand: "", model: "", year: new Date().getFullYear(), engine_cc: 125, fuel_type: "Petrol", vehicle_type: "bike",
   ownership_number: 1, purchase_price: "", purchase_date: "", purchase_source: "", purchase_from: "",
-  vendor_id: null, condition: "Good", color: "", registration_number: "", selling_price: "", notes: "", status: "hidden",
+  vendor_id: null, condition: "Good", color: "", registration_number: "", selling_price: "", notes: "", status: "unlisted",
   bluebook_status: "pending", insurance_status: "pending", tax_clearance_status: "pending", transfer_status: "pending"
 };
 
@@ -32,17 +32,17 @@ export default function Inventory() {
   const [photos, setPhotos] = useState([]);
   const [hidingUnpriced, setHidingUnpriced] = useState(false);
 
-  const unpricedVisible = vehicles.filter(v => !v.selling_price && !["sold", "hidden", "scrap", "in_repair"].includes(v.status));
+  const unpricedVisible = vehicles.filter(v => !v.selling_price && !["sold", "unlisted", "hidden", "scrap", "in_repair"].includes(v.status));
 
   const hideUnpriced = async () => {
     if (unpricedVisible.length === 0) return;
-    if (!window.confirm(`Hide ${unpricedVisible.length} vehicle(s) with no selling price from the website?`)) return;
+    if (!window.confirm(`Move ${unpricedVisible.length} vehicle(s) with no selling price to Unlisted?`)) return;
     setHidingUnpriced(true);
     try {
-      const results = await Promise.allSettled(unpricedVisible.map(v => api.put(`/vehicles/${v.id}`, { status: "hidden" })));
+      const results = await Promise.allSettled(unpricedVisible.map(v => api.put(`/vehicles/${v.id}`, { status: "unlisted" })));
       const failed = results.filter(r => r.status === "rejected").length;
-      if (failed > 0) toast.error(`Hid ${results.length - failed} vehicle(s), ${failed} failed`);
-      else toast.success(`Hid ${results.length} vehicle(s) with no selling price`);
+      if (failed > 0) toast.error(`Moved ${results.length - failed} vehicle(s), ${failed} failed`);
+      else toast.success(`Moved ${results.length} vehicle(s) to Unlisted`);
       fetchVehicles();
     } finally { setHidingUnpriced(false); }
   };
@@ -56,6 +56,13 @@ export default function Inventory() {
     try {
       const r = await api.get("/vehicles");
       setVehicles(r.data);
+      // One-time migration: "hidden" was renamed to "unlisted" — silently carry over any leftover legacy records.
+      const legacyHidden = r.data.filter(v => v.status === "hidden");
+      if (legacyHidden.length > 0) {
+        await Promise.allSettled(legacyHidden.map(v => api.put(`/vehicles/${v.id}`, { status: "unlisted" })));
+        const r2 = await api.get("/vehicles");
+        setVehicles(r2.data);
+      }
     } catch { toast.error("Failed to load vehicles"); }
     finally { setLoading(false); }
   }, []);
@@ -146,7 +153,7 @@ export default function Inventory() {
               data-testid="hide-unpriced-button"
               className="flex items-center gap-2 border border-slate-200 text-slate-700 text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-60"
             >
-              <EyeOff size={16} /> {hidingUnpriced ? "Hiding..." : `Hide ${unpricedVisible.length} With No Price`}
+              <EyeOff size={16} /> {hidingUnpriced ? "Moving..." : `Move ${unpricedVisible.length} With No Price To Unlisted`}
             </button>
           )}
           <button
