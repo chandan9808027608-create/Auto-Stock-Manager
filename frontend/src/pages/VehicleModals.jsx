@@ -3,7 +3,9 @@
  * Kept in the same pages/ directory for co-location.
  */
 import { QRCodeSVG } from "qrcode.react";
-import { formatNPR, EXPENSE_CATEGORIES, CONDITIONS } from "../utils/helpers";
+import { formatNPR, EXPENSE_CATEGORIES, CONDITIONS, SOURCES, FUEL_TYPES } from "../utils/helpers";
+import BSDatePicker from "../components/BSDatePicker";
+import VendorAutocomplete from "../components/VendorAutocomplete";
 
 const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
 const sel = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
@@ -142,6 +144,54 @@ export function EditVehicleModal({ onClose, onSubmit, form, setForm, saving }) {
                 <option value="scooter">Scooter</option>
               </select>
             </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Fuel Type</label>
+              <select value={form.fuel_type || "Petrol"} onChange={e => setForm({ ...form, fuel_type: e.target.value })} className={sel}>
+                {FUEL_TYPES.map(f => <option key={f}>{f}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Ownership Number</label>
+              <select value={form.ownership_number || 1} onChange={e => setForm({ ...form, ownership_number: Number(e.target.value) })} className={sel}>
+                {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}{["st", "nd", "rd"][n - 1] || "th"} Owner</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Color</label>
+              <input value={form.color || ""} onChange={e => setForm({ ...form, color: e.target.value })} placeholder="e.g. Red, Black" className={inp} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Purchase Source</label>
+              <select value={form.purchase_source || ""} onChange={e => setForm({ ...form, purchase_source: e.target.value })} className={sel}>
+                <option value="">Select Source</option>
+                {SOURCES.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Purchased From (Name)</label>
+              <VendorAutocomplete
+                value={form.purchase_from || ""}
+                onChange={(name, vendorId) => setForm({ ...form, purchase_from: name, vendor_id: vendorId || form.vendor_id })}
+                placeholder="Type vendor name to search..."
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Purchase Date (BS)</label>
+              <BSDatePicker
+                value={form.purchase_date || ""}
+                onChange={val => setForm({ ...form, purchase_date: val })}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+            <textarea
+              value={form.notes || ""}
+              onChange={e => setForm({ ...form, notes: e.target.value })}
+              placeholder="Additional notes..."
+              rows={2}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
           </div>
           <div className="border-t border-slate-100 pt-4">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Documents</p>
