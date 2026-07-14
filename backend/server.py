@@ -578,12 +578,46 @@ async def get_vehicle(vid: str, cu: dict = Depends(get_current_user)):
 
 @api_router.put("/vehicles/{vid}")
 async def update_vehicle(vid: str, vehicle: VehicleUpdate, cu: dict = Depends(get_current_user)):
+    existing = await db.vehicles.find_one({"id": vid}, {"_id": 0})
+    if not existing: raise HTTPException(404, "Vehicle not found")
     upd = {k: val for k, val in vehicle.model_dump().items() if val is not None}
     upd["updated_at"] = datetime.now(timezone.utc).isoformat()
     if upd.get("status") == "sold" and "sold_date" not in upd:
         upd["sold_date"] = datetime.now(timezone.utc).date().isoformat()
+
+    # Marking a vehicle Sold directly (Inventory/Edit/quick-status) bypasses the Sales form —
+    # auto-create the matching sale record so it still shows up in the Sales tab.
+    became_sold = upd.get("status") == "sold" and existing.get("status") != "sold"
+    sale_price = upd.get("selling_price", existing.get("selling_price")) or existing.get("purchase_price", 0)
+    if became_sold and not existing.get("selling_price") and "selling_price" not in upd:
+        upd["selling_price"] = sale_price
+
     r = await db.vehicles.update_one({"id": vid}, {"$set": upd})
     if r.matched_count == 0: raise HTTPException(404, "Vehicle not found")
+
+    if became_sold and not await db.sales.find_one({"vehicle_id": vid}):
+        sale_date = upd.get("sold_date", existing.get("sold_date")) or datetime.now(timezone.utc).date().isoformat()
+        await db.sales.insert_one({
+            "id": str(uuid.uuid4()),
+            "vehicle_id": vid,
+            "customer_id": upd.get("customer_id", existing.get("customer_id")),
+            "sale_price": sale_price,
+            "extra_expenses": [],
+            "expenses_total": 0,
+            "total_amount": sale_price,
+            "payment_method": "Due",
+            "paid_cash": 0,
+            "paid_bank": 0,
+            "due_amount": sale_price,
+            "due_date": None,
+            "payment_status": "Unpaid",
+            "payment_history": [],
+            "sale_date": sale_date,
+            "notes": "Auto-created: vehicle marked Sold directly from Inventory",
+            "created_by": cu.get("username"),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
     await db.audit_logs.insert_one({"action": "vehicle_updated", "vehicle_id": vid,
         "user": cu["username"], "timestamp": datetime.now(timezone.utc).isoformat(),
         "details": f"Updated fields: {list(upd.keys())}"})
