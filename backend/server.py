@@ -378,7 +378,9 @@ async def register(req: RegisterRequest, cu: dict = Depends(get_current_user)):
 @api_router.get("/vehicles")
 async def get_vehicles(status: Optional[str] = None, brand: Optional[str] = None, cu: dict = Depends(get_current_user)):
     q = {}
-    if status and status != "all": q["status"] = status
+    if status and status != "all":
+        statuses = [s.strip() for s in status.split(",") if s.strip()]
+        q["status"] = {"$in": statuses} if len(statuses) > 1 else statuses[0]
     if brand and brand != "all": q["brand"] = brand
     vehicles = await db.vehicles.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
     if not vehicles:

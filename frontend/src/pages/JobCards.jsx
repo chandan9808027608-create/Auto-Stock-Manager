@@ -23,6 +23,7 @@ export default function JobCards() {
   // Parts linked to the new job
   const [jobParts, setJobParts] = useState([]);
   const [partSearch, setPartSearch] = useState("");
+  const [vehicleSearch, setVehicleSearch] = useState("");
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -34,7 +35,7 @@ export default function JobCards() {
 
   useEffect(() => {
     fetchJobs();
-    api.get("/vehicles?status=available").then(r => setVehicles(r.data)).catch(() => {});
+    api.get("/vehicles?status=available,in_repair").then(r => setVehicles(r.data)).catch(() => {});
     api.get("/spare-parts").then(r => setSpareParts(r.data)).catch(() => {});
   }, [fetchJobs]);
 
@@ -62,6 +63,14 @@ export default function JobCards() {
     !jobParts.find(jp => jp.part_id === p.id)
   );
 
+  const filteredVehicles = vehicles.filter(v => {
+    if (!vehicleSearch) return false;
+    const q = vehicleSearch.toLowerCase();
+    return v.brand?.toLowerCase().includes(q) || v.model?.toLowerCase().includes(q) || (v.registration_number || "").toLowerCase().includes(q);
+  });
+
+  const selectedVehicle = vehicles.find(v => v.id === form.vehicle_id);
+
   const addPartToJob = (part) => {
     if (part.quantity <= 0) { toast.error(`${part.name} is out of stock`); return; }
     setJobParts(prev => [...prev, { part_id: part.id, part_name: part.name, quantity: 1, unit_cost: part.unit_cost || 0, available_qty: part.quantity }]);
@@ -77,7 +86,7 @@ export default function JobCards() {
 
   const removePartFromJob = (part_id) => setJobParts(prev => prev.filter(p => p.part_id !== part_id));
 
-  const openModal = () => { setForm(EMPTY_FORM); setJobParts([]); setPartSearch(""); setShowModal(true); };
+  const openModal = () => { setForm(EMPTY_FORM); setJobParts([]); setPartSearch(""); setVehicleSearch(""); setShowModal(true); };
 
   const createJob = async (e) => {
     e.preventDefault();
@@ -249,10 +258,36 @@ export default function JobCards() {
             <form onSubmit={createJob} className="p-5 space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Vehicle <span className="text-red-500">*</span></label>
-                <select value={form.vehicle_id} onChange={e => setForm({...form, vehicle_id: e.target.value})} className={sel} data-testid="job-vehicle-select">
-                  <option value="">Select Vehicle</option>
-                  {vehicles.map(v => <option key={v.id} value={v.id}>{v.brand} {v.model} {v.year} {v.registration_number ? `(${v.registration_number})` : ""}</option>)}
-                </select>
+                {selectedVehicle ? (
+                  <div className="flex items-center justify-between h-9 px-3 text-sm border border-slate-200 rounded-lg bg-slate-50" data-testid="job-vehicle-selected">
+                    <span className="truncate">{selectedVehicle.brand} {selectedVehicle.model} {selectedVehicle.year} {selectedVehicle.registration_number ? `(${selectedVehicle.registration_number})` : ""}</span>
+                    <button type="button" onClick={() => setForm({...form, vehicle_id: ""})} className="text-slate-400 hover:text-red-500 ml-2 shrink-0"><X size={14} /></button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <input
+                      value={vehicleSearch}
+                      onChange={e => setVehicleSearch(e.target.value)}
+                      placeholder="Search by registration number, brand, model..."
+                      className={inp}
+                      data-testid="job-vehicle-search"
+                      autoComplete="off"
+                    />
+                    {vehicleSearch && (
+                      <div className="absolute left-0 right-0 top-10 z-10 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto" data-testid="job-vehicle-dropdown">
+                        {filteredVehicles.length === 0 ? (
+                          <div className="px-3 py-2 text-xs text-slate-400">No matching vehicles</div>
+                        ) : filteredVehicles.map(v => (
+                          <button type="button" key={v.id} onClick={() => { setForm({...form, vehicle_id: v.id}); setVehicleSearch(""); }} className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 border-b border-slate-50 last:border-0">
+                            <span className="font-medium text-slate-800">{v.brand} {v.model} {v.year}</span>
+                            {v.registration_number && <span className="text-slate-400 ml-1.5 font-mono">{v.registration_number}</span>}
+                            {v.status === "in_repair" && <span className="ml-1.5 text-purple-600 font-medium">(In Repair)</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Work Description <span className="text-red-500">*</span></label>
