@@ -189,16 +189,16 @@ export default function Inventory() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Filter size={14} className="text-slate-400" />
-          {STATUSES.map(s => (
-            <button
-              key={s}
-              data-testid={`filter-${s}`}
-              onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${statusFilter === s ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-            >
-              {s === "all" ? "All Status" : s}
-            </button>
-          ))}
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            data-testid="status-filter-select"
+            className="h-9 px-3 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {STATUSES.map(s => (
+              <option key={s} value={s}>{s === "all" ? "All Status" : s.charAt(0).toUpperCase() + s.slice(1)}</option>
+            ))}
+          </select>
           <select
             value={brandFilter}
             onChange={e => setBrandFilter(e.target.value)}
