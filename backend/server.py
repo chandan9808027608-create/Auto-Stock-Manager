@@ -485,6 +485,9 @@ async def import_vehicles(file: UploadFile = File(...), cu: dict = Depends(get_c
             selling_price = _import_cell_num(record, "selling_price")
             min_selling_price = _import_cell_num(record, "minimum_selling_price")
             km_run = _import_cell_num(record, "kilometer_run")
+            status_val = (_import_cell_str(record, "status") or "available").lower()
+            if status_val not in ("available", "reserved", "sold"):
+                status_val = "available"
             doc = {
                 "id": str(uuid.uuid4()),
                 "brand": _import_cell_str(record, "brand"),
@@ -510,7 +513,7 @@ async def import_vehicles(file: UploadFile = File(...), cu: dict = Depends(get_c
                 "selling_price": selling_price,
                 "minimum_selling_price": min_selling_price,
                 "notes": _import_cell_str(record, "notes"),
-                "status": "available",
+                "status": status_val,
                 "bluebook_status": "pending", "insurance_status": "pending",
                 "tax_clearance_status": "pending", "transfer_status": "pending",
                 "sold_date": None, "customer_id": None,

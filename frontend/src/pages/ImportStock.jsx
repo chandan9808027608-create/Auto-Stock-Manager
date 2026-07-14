@@ -7,7 +7,7 @@ const REQUIRED_COLUMNS = ["brand", "model", "year", "purchase_price", "purchase_
 const OPTIONAL_COLUMNS = [
   "variant", "engine_cc", "fuel_type", "ownership_number", "chassis_number", "engine_number",
   "kilometer_run", "condition", "condition_rating", "color",
-  "accessories_cost", "purchase_from", "selling_price", "minimum_selling_price", "notes",
+  "accessories_cost", "purchase_from", "selling_price", "minimum_selling_price", "notes", "status",
 ];
 
 export default function ImportStock() {
@@ -169,7 +169,7 @@ export default function ImportStock() {
             <span key={c} className="text-xs font-mono bg-slate-50 text-slate-600 border border-slate-100 px-2 py-1 rounded-md">{c}</span>
           ))}
         </div>
-        <p className="text-xs text-slate-400 mt-3">* required column. Rows missing a required value are skipped and listed above, everything else is imported as an Available vehicle.</p>
+        <p className="text-xs text-slate-400 mt-3">* required column. Rows missing a required value are skipped and listed above. Vehicles are imported as Available unless a valid <span className="font-mono text-xs bg-slate-100 px-1 py-0.5 rounded">status</span> column (available, reserved, or sold) is provided.</p>
       </div>
     </div>
   );
