@@ -15,6 +15,7 @@ export const getAgingStyle = (category) => {
 
 export const getStatusStyle = (status) => {
   const map = {
+    hidden:    { bg: "bg-slate-200",  text: "text-slate-700",  label: "Hidden" },
     available: { bg: "bg-blue-100",   text: "text-blue-800",   label: "Available" },
     sold:      { bg: "bg-green-100",  text: "text-green-800",  label: "Sold" },
     reserved:  { bg: "bg-yellow-100", text: "text-yellow-800", label: "Reserved" },

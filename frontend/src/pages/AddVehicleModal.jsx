@@ -112,6 +112,7 @@ export function AddVehicleModal({ form, setForm, onClose, onSubmit, saving, phot
             </Field>
             <Field label="Status">
               <select data-testid="add-status-select" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className={sel}>
+                <option value="hidden">Hidden (not shown on website)</option>
                 <option value="available">Available</option>
                 <option value="reserved">Reserved</option>
                 <option value="sold">Sold</option>

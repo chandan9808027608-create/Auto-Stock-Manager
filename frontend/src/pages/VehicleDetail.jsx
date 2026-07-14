@@ -201,6 +201,7 @@ export default function VehicleDetail() {
             data-testid="vehicle-status-select"
             title="Change vehicle status"
           >
+            <option value="hidden">Hidden</option>
             <option value="available">Available</option>
             <option value="reserved">Reserved</option>
             <option value="sold">Sold</option>

@@ -170,7 +170,7 @@ export default function ImportStock() {
             <span key={c} className="text-xs font-mono bg-slate-50 text-slate-600 border border-slate-100 px-2 py-1 rounded-md">{c}</span>
           ))}
         </div>
-        <p className="text-xs text-slate-400 mt-3">* required column. Rows missing a required value are skipped and listed above. Vehicles are imported as Available unless a valid <span className="font-mono text-xs bg-slate-100 px-1 py-0.5 rounded">status</span> column (available, reserved, or sold) is provided.</p>
+        <p className="text-xs text-slate-400 mt-3">* required column. Rows missing a required value are skipped and listed above. Vehicles are imported as Available unless a valid <span className="font-mono text-xs bg-slate-100 px-1 py-0.5 rounded">status</span> column (available, reserved, sold, or hidden) is provided.</p>
       </div>
     </div>
   );

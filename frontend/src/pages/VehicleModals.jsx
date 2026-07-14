@@ -126,6 +126,7 @@ export function EditVehicleModal({ onClose, onSubmit, form, setForm, saving }) {
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
               <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className={sel}>
+                <option value="hidden">Hidden (not shown on website)</option>
                 <option value="available">Available</option>
                 <option value="reserved">Reserved</option>
                 <option value="sold">Sold</option>
