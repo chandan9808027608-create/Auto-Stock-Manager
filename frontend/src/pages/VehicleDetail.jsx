@@ -187,7 +187,7 @@ export default function VehicleDetail() {
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate("/inventory")} className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"><ArrowLeft size={18} /></button>
           <div>
@@ -257,7 +257,7 @@ export default function VehicleDetail() {
           {/* Overview Tab */}
           {activeTab === "overview" && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
-              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
                 <span className="text-sm text-slate-500 shrink-0">Registration</span>
                 {isEditing ? (
                   <input
@@ -265,45 +265,45 @@ export default function VehicleDetail() {
                     value={editForm.registration_number || ""}
                     onChange={e => setEditForm({ ...editForm, registration_number: e.target.value })}
                     placeholder="e.g. Ba 1 Pa 1234"
-                    className={`${inp} h-8 text-right w-40`}
+                    className={`${inp} w-full sm:w-40 sm:text-right`}
                   />
                 ) : (
-                  <span className="text-sm font-medium text-slate-900 text-right">{vehicle.registration_number || "Not entered"}</span>
+                  <span className="text-sm font-medium text-slate-900 sm:text-right">{vehicle.registration_number || "Not entered"}</span>
                 )}
               </div>
-              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
                 <span className="text-sm text-slate-500 shrink-0">Color</span>
                 {isEditing ? (
-                  <input value={editForm.color || ""} onChange={e => setEditForm({ ...editForm, color: e.target.value })} placeholder="e.g. Red, Black" className={`${inp} h-8 text-right w-40`} />
+                  <input value={editForm.color || ""} onChange={e => setEditForm({ ...editForm, color: e.target.value })} placeholder="e.g. Red, Black" className={`${inp} w-full sm:w-40 sm:text-right`} />
                 ) : (
-                  <span className="text-sm font-medium text-slate-900 text-right">{vehicle.color || "Not specified"}</span>
+                  <span className="text-sm font-medium text-slate-900 sm:text-right">{vehicle.color || "Not specified"}</span>
                 )}
               </div>
-              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
                 <span className="text-sm text-slate-500 shrink-0">Condition</span>
                 {isEditing ? (
-                  <select value={editForm.condition || ""} onChange={e => setEditForm({ ...editForm, condition: e.target.value })} className={`${sel} h-8 w-40`}>
+                  <select value={editForm.condition || ""} onChange={e => setEditForm({ ...editForm, condition: e.target.value })} className={`${sel} w-full sm:w-40`}>
                     {CONDITIONS.map(c => <option key={c}>{c}</option>)}
                   </select>
                 ) : (
-                  <span className="text-sm font-medium text-slate-900 text-right">{vehicle.condition}</span>
+                  <span className="text-sm font-medium text-slate-900 sm:text-right">{vehicle.condition}</span>
                 )}
               </div>
-              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
                 <span className="text-sm text-slate-500 shrink-0">Purchase Source</span>
                 {isEditing ? (
-                  <select value={editForm.purchase_source || ""} onChange={e => setEditForm({ ...editForm, purchase_source: e.target.value })} className={`${sel} h-8 w-40`}>
+                  <select value={editForm.purchase_source || ""} onChange={e => setEditForm({ ...editForm, purchase_source: e.target.value })} className={`${sel} w-full sm:w-40`}>
                     <option value="">Select Source</option>
                     {SOURCES.map(s => <option key={s}>{s}</option>)}
                   </select>
                 ) : (
-                  <span className="text-sm font-medium text-slate-900 text-right">{vehicle.purchase_source}</span>
+                  <span className="text-sm font-medium text-slate-900 sm:text-right">{vehicle.purchase_source}</span>
                 )}
               </div>
-              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
                 <span className="text-sm text-slate-500 shrink-0">Purchased From</span>
                 {isEditing ? (
-                  <div className="w-48">
+                  <div className="w-full sm:w-48">
                     <VendorAutocomplete
                       value={editForm.purchase_from || ""}
                       onChange={(name, vendorId) => setEditForm({ ...editForm, purchase_from: name, vendor_id: vendorId || editForm.vendor_id })}
@@ -311,35 +311,35 @@ export default function VehicleDetail() {
                     />
                   </div>
                 ) : (
-                  <span className="text-sm font-medium text-slate-900 text-right">{vehicle.purchase_from || "—"}</span>
+                  <span className="text-sm font-medium text-slate-900 sm:text-right">{vehicle.purchase_from || "—"}</span>
                 )}
               </div>
-              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
                 <span className="text-sm text-slate-500 shrink-0">Ownership</span>
                 {isEditing ? (
-                  <select value={editForm.ownership_number || 1} onChange={e => setEditForm({ ...editForm, ownership_number: Number(e.target.value) })} className={`${sel} h-8 w-40`}>
+                  <select value={editForm.ownership_number || 1} onChange={e => setEditForm({ ...editForm, ownership_number: Number(e.target.value) })} className={`${sel} w-full sm:w-40`}>
                     {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}{["st", "nd", "rd"][n - 1] || "th"} Owner</option>)}
                   </select>
                 ) : (
-                  <span className="text-sm font-medium text-slate-900 text-right">{vehicle.ownership_number}{["st","nd","rd"][vehicle.ownership_number-1]||"th"} Owner</span>
+                  <span className="text-sm font-medium text-slate-900 sm:text-right">{vehicle.ownership_number}{["st","nd","rd"][vehicle.ownership_number-1]||"th"} Owner</span>
                 )}
               </div>
-              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
                 <span className="text-sm text-slate-500 shrink-0">Purchase Date</span>
                 {isEditing ? (
-                  <div className="w-48">
+                  <div className="w-full sm:w-48">
                     <BSDatePicker value={editForm.purchase_date || ""} onChange={val => setEditForm({ ...editForm, purchase_date: val })} />
                   </div>
                 ) : (
-                  <span className="text-sm font-medium text-slate-900 text-right"><HoverADDate date={vehicle.purchase_date} /></span>
+                  <span className="text-sm font-medium text-slate-900 sm:text-right"><HoverADDate date={vehicle.purchase_date} /></span>
                 )}
               </div>
-              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
                 <span className="text-sm text-slate-500 shrink-0">Sold Date</span>
-                <span className="text-sm font-medium text-slate-900 text-right">{vehicle.sold_date ? <HoverADDate date={vehicle.sold_date} /> : "—"}</span>
+                <span className="text-sm font-medium text-slate-900 sm:text-right">{vehicle.sold_date ? <HoverADDate date={vehicle.sold_date} /> : "—"}</span>
               </div>
               {(isEditing || vehicle.notes) && (
-                <div className="col-span-2 mt-2">
+                <div className="col-span-1 sm:col-span-2 mt-2">
                   <div className="text-xs text-slate-500 mb-1">Notes</div>
                   {isEditing ? (
                     <textarea
@@ -347,7 +347,7 @@ export default function VehicleDetail() {
                       onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
                       placeholder="Additional notes..."
                       rows={2}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                      className="w-full px-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                     />
                   ) : (
                     <div className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3">{vehicle.notes}</div>

@@ -55,7 +55,7 @@ export default function VendorAutocomplete({ value, onChange, placeholder = "Typ
     onChange(vendor.name, vendor.id);
   };
 
-  const inp = `w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`;
+  const inp = `w-full h-10 sm:h-9 px-3 text-base sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`;
 
   return (
     <div ref={containerRef} className="relative" data-testid="vendor-autocomplete">

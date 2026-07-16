@@ -5,8 +5,9 @@
 import { QRCodeSVG } from "qrcode.react";
 import { formatNPR, EXPENSE_CATEGORIES } from "../utils/helpers";
 
-export const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
-export const sel = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+// text-base (16px) on mobile stops iOS Safari auto-zooming the page on focus; h-10 gives a comfortable touch target
+export const inp = "w-full h-10 sm:h-9 px-3 text-base sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
+export const sel = "w-full h-10 sm:h-9 px-3 text-base sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
 
 // ── Expense Modal ──────────────────────────────────────────────────────
 export function ExpenseModal({ onClose, onSubmit, form, setForm, saving }) {
@@ -60,7 +61,7 @@ export function JobCardModal({ onClose, onSubmit, form, setForm, saving, mechani
         <form onSubmit={onSubmit} className="p-5 space-y-4">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Work Description <span className="text-red-500">*</span></label>
-            <textarea value={form.work_description} onChange={e => setForm({ ...form, work_description: e.target.value })} placeholder="Describe the work to be done..." rows={3} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" data-testid="job-description-input" />
+            <textarea value={form.work_description} onChange={e => setForm({ ...form, work_description: e.target.value })} placeholder="Describe the work to be done..." rows={3} className="w-full px-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" data-testid="job-description-input" />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Mechanic Name <span className="text-red-500">*</span></label>

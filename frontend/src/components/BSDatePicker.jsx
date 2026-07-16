@@ -70,7 +70,7 @@ export default function BSDatePicker({ value, onChange, required, className = ""
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full h-9 px-3 text-sm border border-slate-200 rounded-lg bg-white flex items-center justify-between gap-2 hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full h-10 sm:h-9 px-3 text-sm border border-slate-200 rounded-lg bg-white flex items-center justify-between gap-2 hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
         data-testid="bs-date-trigger"
       >
         <span className={selectedBS ? "text-slate-800" : "text-slate-400"}>
@@ -86,9 +86,12 @@ export default function BSDatePicker({ value, onChange, required, className = ""
       </div>
 
       {open && viewYear && (
-        <div className="absolute z-20 mt-1 w-72 bg-white border border-slate-200 rounded-xl shadow-lg p-3" data-testid="bs-calendar-popover">
+        <div
+          className="absolute z-20 mt-1 w-72 max-w-[92vw] left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 bg-white border border-slate-200 rounded-xl shadow-lg p-3"
+          data-testid="bs-calendar-popover"
+        >
           <div className="flex items-center justify-between mb-2 gap-2">
-            <button type="button" onClick={() => changeMonth(-1)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-500" data-testid="bs-prev-month">
+            <button type="button" onClick={() => changeMonth(-1)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500" data-testid="bs-prev-month">
               <ChevronLeft size={16} />
             </button>
             <div className="flex items-center gap-1.5">
@@ -96,13 +99,13 @@ export default function BSDatePicker({ value, onChange, required, className = ""
               <select
                 value={viewYear}
                 onChange={e => setViewYear(Number(e.target.value))}
-                className="h-7 px-1 text-xs border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="h-8 sm:h-7 px-1 text-base sm:text-xs border border-slate-200 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                 data-testid="bs-year-select"
               >
                 {years.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
-            <button type="button" onClick={() => changeMonth(1)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-500" data-testid="bs-next-month">
+            <button type="button" onClick={() => changeMonth(1)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500" data-testid="bs-next-month">
               <ChevronRight size={16} />
             </button>
           </div>
@@ -118,7 +121,7 @@ export default function BSDatePicker({ value, onChange, required, className = ""
                   key={day}
                   type="button"
                   onClick={() => pickDay(day)}
-                  className={`h-7 w-7 text-xs rounded-full flex items-center justify-center transition-colors ${
+                  className={`h-8 w-8 sm:h-7 sm:w-7 text-xs rounded-full flex items-center justify-center transition-colors ${
                     isSelected ? "bg-blue-600 text-white font-semibold" : "text-slate-700 hover:bg-blue-50"
                   }`}
                   data-testid={`bs-day-${day}`}
