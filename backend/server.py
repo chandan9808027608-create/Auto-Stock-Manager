@@ -631,6 +631,22 @@ async def delete_vehicle(vid: str, cu: dict = Depends(get_current_user)):
     await db.job_cards.delete_many({"vehicle_id": vid})
     return {"message": "Deleted"}
 
+@api_router.delete("/vehicles")
+async def delete_all_vehicles(confirm: str = "", cu: dict = Depends(get_current_user)):
+    if cu.get("role") != "admin":
+        raise HTTPException(403, "Only admins can clear all inventory")
+    if confirm != "DELETE ALL":
+        raise HTTPException(400, "Pass confirm=DELETE ALL to proceed")
+    vehicle_ids = [v["id"] for v in await db.vehicles.find({}, {"_id": 0, "id": 1}).to_list(100000)]
+    result = await db.vehicles.delete_many({})
+    if vehicle_ids:
+        await db.expenses.delete_many({"vehicle_id": {"$in": vehicle_ids}})
+        await db.job_cards.delete_many({"vehicle_id": {"$in": vehicle_ids}})
+    await db.audit_logs.insert_one({"action": "vehicles_bulk_deleted",
+        "user": cu["username"], "timestamp": datetime.now(timezone.utc).isoformat(),
+        "details": f"Cleared all inventory: {result.deleted_count} vehicles deleted"})
+    return {"message": f"Deleted {result.deleted_count} vehicles"}
+
 @api_router.get("/vehicles/{vid}/qr-data")
 async def get_vehicle_qr(vid: str):
     v = await db.vehicles.find_one({"id": vid}, {"_id": 0})
