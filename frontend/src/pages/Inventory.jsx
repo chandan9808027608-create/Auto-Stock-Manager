@@ -273,7 +273,10 @@ export default function Inventory() {
                         <div className="text-xs text-slate-500">{v.fuel_type} · {v.ownership_number}{["st","nd","rd"][v.ownership_number-1]||"th"} owner</div>
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700 whitespace-nowrap">{v.year} · {v.engine_cc}cc</td>
-                      <td className="px-4 py-3 text-sm font-mono text-slate-600">{v.registration_number || "—"}</td>
+                      <td className="px-4 py-3">
+                        <div className="text-sm font-mono text-slate-600">{v.registration_number || "—"}</div>
+                        {v.purchase_source && <div className="text-xs text-slate-400">{v.purchase_source}</div>}
+                      </td>
                       <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap"><HoverADDate date={v.purchase_date} /></td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${ag.bg} ${ag.text}`}>
