@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2, Edit, CheckCircle, AlertCircle, Clock, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
-import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, getJobStyle, EXPENSE_CATEGORIES, VEHICLE_STATUS_OPTIONS, CONDITIONS, SOURCES, FUEL_TYPES } from "../utils/helpers";
+import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, getJobStyle, EXPENSE_CATEGORIES, VEHICLE_STATUS_OPTIONS, CONDITIONS, SOURCES } from "../utils/helpers";
 import { ExpenseModal, JobCardModal, QRLabelModal, inp, sel } from "./VehicleModals";
 import HoverADDate from "../components/HoverADDate";
 import BSDatePicker from "../components/BSDatePicker";
@@ -328,119 +328,107 @@ export default function VehicleDetail() {
 
         <div className="p-5">
           {/* Overview Tab */}
-          {activeTab === "overview" && (isEditing ? (
-            <form onSubmit={saveEdit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                {[["Brand","brand","text"],["Model","model","text"],["Year","year","number"],["Engine CC","engine_cc","number"],["Purchase Price","purchase_price","number"],["Selling Price","selling_price","number"]].map(([label, key, type]) => (
-                  <div key={key}>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
-                    <input type={type} value={editForm[key] || ""} onChange={e => setEditForm({ ...editForm, [key]: e.target.value })} className={inp} />
-                  </div>
-                ))}
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Registration Number<span className="text-red-500 ml-0.5">*</span></label>
+          {activeTab === "overview" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+                <span className="text-sm text-slate-500 shrink-0">Registration</span>
+                {isEditing ? (
                   <input
                     data-testid="edit-registration-number-input"
                     value={editForm.registration_number || ""}
                     onChange={e => setEditForm({ ...editForm, registration_number: e.target.value })}
                     placeholder="e.g. Ba 1 Pa 1234"
-                    className={inp}
+                    className={`${inp} h-8 text-right w-40`}
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
-                  <select value={editForm.status} onChange={e => setEditForm({ ...editForm, status: e.target.value })} className={sel}>
-                    {VEHICLE_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Condition</label>
-                  <select value={editForm.condition} onChange={e => setEditForm({ ...editForm, condition: e.target.value })} className={sel}>
+                ) : (
+                  <span className="text-sm font-medium text-slate-900 text-right">{vehicle.registration_number || "Not entered"}</span>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+                <span className="text-sm text-slate-500 shrink-0">Color</span>
+                {isEditing ? (
+                  <input value={editForm.color || ""} onChange={e => setEditForm({ ...editForm, color: e.target.value })} placeholder="e.g. Red, Black" className={`${inp} h-8 text-right w-40`} />
+                ) : (
+                  <span className="text-sm font-medium text-slate-900 text-right">{vehicle.color || "Not specified"}</span>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+                <span className="text-sm text-slate-500 shrink-0">Condition</span>
+                {isEditing ? (
+                  <select value={editForm.condition || ""} onChange={e => setEditForm({ ...editForm, condition: e.target.value })} className={`${sel} h-8 w-40`}>
                     {CONDITIONS.map(c => <option key={c}>{c}</option>)}
                   </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Type</label>
-                  <select data-testid="edit-vehicle-type-select" value={editForm.vehicle_type || "bike"} onChange={e => setEditForm({ ...editForm, vehicle_type: e.target.value })} className={sel}>
-                    <option value="bike">Bike</option>
-                    <option value="scooter">Scooter</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Fuel Type</label>
-                  <select value={editForm.fuel_type || "Petrol"} onChange={e => setEditForm({ ...editForm, fuel_type: e.target.value })} className={sel}>
-                    {FUEL_TYPES.map(f => <option key={f}>{f}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Ownership Number</label>
-                  <select value={editForm.ownership_number || 1} onChange={e => setEditForm({ ...editForm, ownership_number: Number(e.target.value) })} className={sel}>
-                    {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}{["st", "nd", "rd"][n - 1] || "th"} Owner</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Color</label>
-                  <input value={editForm.color || ""} onChange={e => setEditForm({ ...editForm, color: e.target.value })} placeholder="e.g. Red, Black" className={inp} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Purchase Source</label>
-                  <select value={editForm.purchase_source || ""} onChange={e => setEditForm({ ...editForm, purchase_source: e.target.value })} className={sel}>
+                ) : (
+                  <span className="text-sm font-medium text-slate-900 text-right">{vehicle.condition}</span>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+                <span className="text-sm text-slate-500 shrink-0">Purchase Source</span>
+                {isEditing ? (
+                  <select value={editForm.purchase_source || ""} onChange={e => setEditForm({ ...editForm, purchase_source: e.target.value })} className={`${sel} h-8 w-40`}>
                     <option value="">Select Source</option>
                     {SOURCES.map(s => <option key={s}>{s}</option>)}
                   </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Purchased From (Name)</label>
-                  <VendorAutocomplete
-                    value={editForm.purchase_from || ""}
-                    onChange={(name, vendorId) => setEditForm({ ...editForm, purchase_from: name, vendor_id: vendorId || editForm.vendor_id })}
-                    placeholder="Type vendor name to search..."
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Purchase Date (BS)</label>
-                  <BSDatePicker
-                    value={editForm.purchase_date || ""}
-                    onChange={val => setEditForm({ ...editForm, purchase_date: val })}
-                  />
-                </div>
+                ) : (
+                  <span className="text-sm font-medium text-slate-900 text-right">{vehicle.purchase_source}</span>
+                )}
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
-                <textarea
-                  value={editForm.notes || ""}
-                  onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
-                  placeholder="Additional notes..."
-                  rows={2}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                />
+              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+                <span className="text-sm text-slate-500 shrink-0">Purchased From</span>
+                {isEditing ? (
+                  <div className="w-48">
+                    <VendorAutocomplete
+                      value={editForm.purchase_from || ""}
+                      onChange={(name, vendorId) => setEditForm({ ...editForm, purchase_from: name, vendor_id: vendorId || editForm.vendor_id })}
+                      placeholder="Vendor name..."
+                    />
+                  </div>
+                ) : (
+                  <span className="text-sm font-medium text-slate-900 text-right">{vehicle.purchase_from || "—"}</span>
+                )}
               </div>
-            </form>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
-              {[
-                ["Registration", vehicle.registration_number || "Not entered"],
-                ["Color", vehicle.color || "Not specified"],
-                ["Condition", vehicle.condition],
-                ["Purchase Source", vehicle.purchase_source],
-                ["Purchased From", vehicle.purchase_from || "—"],
-                ["Ownership", `${vehicle.ownership_number}${["st","nd","rd"][vehicle.ownership_number-1]||"th"} Owner`],
-                ["Purchase Date", <HoverADDate date={vehicle.purchase_date} />],
-                ["Sold Date", vehicle.sold_date ? <HoverADDate date={vehicle.sold_date} /> : "—"],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="text-sm text-slate-500">{k}</span>
-                  <span className="text-sm font-medium text-slate-900 text-right">{v}</span>
-                </div>
-              ))}
-              {vehicle.notes && (
+              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+                <span className="text-sm text-slate-500 shrink-0">Ownership</span>
+                {isEditing ? (
+                  <select value={editForm.ownership_number || 1} onChange={e => setEditForm({ ...editForm, ownership_number: Number(e.target.value) })} className={`${sel} h-8 w-40`}>
+                    {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}{["st", "nd", "rd"][n - 1] || "th"} Owner</option>)}
+                  </select>
+                ) : (
+                  <span className="text-sm font-medium text-slate-900 text-right">{vehicle.ownership_number}{["st","nd","rd"][vehicle.ownership_number-1]||"th"} Owner</span>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+                <span className="text-sm text-slate-500 shrink-0">Purchase Date</span>
+                {isEditing ? (
+                  <div className="w-48">
+                    <BSDatePicker value={editForm.purchase_date || ""} onChange={val => setEditForm({ ...editForm, purchase_date: val })} />
+                  </div>
+                ) : (
+                  <span className="text-sm font-medium text-slate-900 text-right"><HoverADDate date={vehicle.purchase_date} /></span>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-50">
+                <span className="text-sm text-slate-500 shrink-0">Sold Date</span>
+                <span className="text-sm font-medium text-slate-900 text-right">{vehicle.sold_date ? <HoverADDate date={vehicle.sold_date} /> : "—"}</span>
+              </div>
+              {(isEditing || vehicle.notes) && (
                 <div className="col-span-2 mt-2">
                   <div className="text-xs text-slate-500 mb-1">Notes</div>
-                  <div className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3">{vehicle.notes}</div>
+                  {isEditing ? (
+                    <textarea
+                      value={editForm.notes || ""}
+                      onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
+                      placeholder="Additional notes..."
+                      rows={2}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    />
+                  ) : (
+                    <div className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3">{vehicle.notes}</div>
+                  )}
                 </div>
               )}
             </div>
-          ))}
+          )}
 
           {/* Expenses Tab */}
           {activeTab === "expenses" && (
