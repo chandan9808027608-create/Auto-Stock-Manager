@@ -3,12 +3,10 @@
  * Kept in the same pages/ directory for co-location.
  */
 import { QRCodeSVG } from "qrcode.react";
-import { formatNPR, EXPENSE_CATEGORIES, CONDITIONS, SOURCES, FUEL_TYPES, VEHICLE_STATUS_OPTIONS } from "../utils/helpers";
-import BSDatePicker from "../components/BSDatePicker";
-import VendorAutocomplete from "../components/VendorAutocomplete";
+import { formatNPR, EXPENSE_CATEGORIES } from "../utils/helpers";
 
-const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
-const sel = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+export const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
+export const sel = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
 
 // ── Expense Modal ──────────────────────────────────────────────────────
 export function ExpenseModal({ onClose, onSubmit, form, setForm, saving }) {
@@ -88,126 +86,6 @@ export function JobCardModal({ onClose, onSubmit, form, setForm, saving, mechani
             <button type="button" onClick={onClose} className="flex-1 h-10 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
             <button type="submit" disabled={saving} className="flex-1 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60" data-testid="save-job-btn">
               {saving ? "Saving..." : "Create Job Card"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ── Edit Vehicle Modal ─────────────────────────────────────────────────
-export function EditVehicleModal({ onClose, onSubmit, form, setForm, saving }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-5 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">Edit Vehicle</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
-        </div>
-        <form onSubmit={onSubmit} className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            {[["Brand","brand","text"],["Model","model","text"],["Year","year","number"],["Engine CC","engine_cc","number"],["Purchase Price","purchase_price","number"],["Selling Price","selling_price","number"]].map(([label, key, type]) => (
-              <div key={key}>
-                <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
-                <input type={type} value={form[key] || ""} onChange={e => setForm({ ...form, [key]: e.target.value })} className={inp} />
-              </div>
-            ))}
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Registration Number<span className="text-red-500 ml-0.5">*</span></label>
-              <input
-                data-testid="edit-registration-number-input"
-                value={form.registration_number || ""}
-                onChange={e => setForm({ ...form, registration_number: e.target.value })}
-                placeholder="e.g. Ba 1 Pa 1234"
-                className={inp}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
-              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className={sel}>
-                {VEHICLE_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Condition</label>
-              <select value={form.condition} onChange={e => setForm({ ...form, condition: e.target.value })} className={sel}>
-                {CONDITIONS.map(c => <option key={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Type</label>
-              <select data-testid="edit-vehicle-type-select" value={form.vehicle_type || "bike"} onChange={e => setForm({ ...form, vehicle_type: e.target.value })} className={sel}>
-                <option value="bike">Bike</option>
-                <option value="scooter">Scooter</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Fuel Type</label>
-              <select value={form.fuel_type || "Petrol"} onChange={e => setForm({ ...form, fuel_type: e.target.value })} className={sel}>
-                {FUEL_TYPES.map(f => <option key={f}>{f}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Ownership Number</label>
-              <select value={form.ownership_number || 1} onChange={e => setForm({ ...form, ownership_number: Number(e.target.value) })} className={sel}>
-                {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}{["st", "nd", "rd"][n - 1] || "th"} Owner</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Color</label>
-              <input value={form.color || ""} onChange={e => setForm({ ...form, color: e.target.value })} placeholder="e.g. Red, Black" className={inp} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Purchase Source</label>
-              <select value={form.purchase_source || ""} onChange={e => setForm({ ...form, purchase_source: e.target.value })} className={sel}>
-                <option value="">Select Source</option>
-                {SOURCES.map(s => <option key={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Purchased From (Name)</label>
-              <VendorAutocomplete
-                value={form.purchase_from || ""}
-                onChange={(name, vendorId) => setForm({ ...form, purchase_from: name, vendor_id: vendorId || form.vendor_id })}
-                placeholder="Type vendor name to search..."
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-slate-600 mb-1">Purchase Date (BS)</label>
-              <BSDatePicker
-                value={form.purchase_date || ""}
-                onChange={val => setForm({ ...form, purchase_date: val })}
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
-            <textarea
-              value={form.notes || ""}
-              onChange={e => setForm({ ...form, notes: e.target.value })}
-              placeholder="Additional notes..."
-              rows={2}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            />
-          </div>
-          <div className="border-t border-slate-100 pt-4">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Documents</p>
-            <div className="grid grid-cols-2 gap-3">
-              {[["bluebook_status","Bluebook"],["insurance_status","Insurance"],["tax_clearance_status","Tax Clearance"],["transfer_status","Transfer"]].map(([key, label]) => (
-                <div key={key}>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
-                  <select value={form[key] || "pending"} onChange={e => setForm({ ...form, [key]: e.target.value })} className={sel}>
-                    <option value="pending">Pending</option><option value="ok">OK</option><option value="missing">Missing</option>
-                  </select>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="flex-1 h-10 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
-            <button type="submit" disabled={saving} className="flex-1 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60">
-              {saving ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </form>

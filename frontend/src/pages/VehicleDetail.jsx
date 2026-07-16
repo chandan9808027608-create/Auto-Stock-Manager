@@ -3,9 +3,11 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2, Edit, CheckCircle, AlertCircle, Clock, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
-import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, getJobStyle, EXPENSE_CATEGORIES, VEHICLE_STATUS_OPTIONS } from "../utils/helpers";
-import { ExpenseModal, JobCardModal, EditVehicleModal, QRLabelModal } from "./VehicleModals";
+import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, getJobStyle, EXPENSE_CATEGORIES, VEHICLE_STATUS_OPTIONS, CONDITIONS, SOURCES, FUEL_TYPES } from "../utils/helpers";
+import { ExpenseModal, JobCardModal, QRLabelModal, inp, sel } from "./VehicleModals";
 import HoverADDate from "../components/HoverADDate";
+import BSDatePicker from "../components/BSDatePicker";
+import VendorAutocomplete from "../components/VendorAutocomplete";
 
 const DocCard = ({ label, status }) => {
   const s = getDocStyle(status);
@@ -30,7 +32,7 @@ export default function VehicleDetail() {
   const [activeTab, setActiveTab] = useState("overview");
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showJobModal, setShowJobModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [expForm, setExpForm] = useState({ category: "servicing", amount: "", description: "", date: "" });
   const [jobForm, setJobForm] = useState({ work_description: "", mechanic_name: "", estimated_cost: "", notes: "" });
   const [editForm, setEditForm] = useState({});
@@ -96,9 +98,11 @@ export default function VehicleDetail() {
     setSaving(true);
     try {
       await api.put(`/vehicles/${id}`, { ...editForm, purchase_price: Number(editForm.purchase_price), selling_price: editForm.selling_price ? Number(editForm.selling_price) : null, year: Number(editForm.year), engine_cc: Number(editForm.engine_cc), ownership_number: Number(editForm.ownership_number) });
-      toast.success("Vehicle updated"); setShowEditModal(false); fetchVehicle();
+      toast.success("Vehicle updated"); setIsEditing(false); fetchVehicle();
     } catch { toast.error("Failed to update"); } finally { setSaving(false); }
   };
+
+  const cancelEdit = () => { setEditForm(vehicle); setIsEditing(false); };
 
   const [showQR, setShowQR] = useState(false);
   const [qrData, setQrData] = useState(null);
@@ -203,7 +207,16 @@ export default function VehicleDetail() {
           >
             {VEHICLE_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <button onClick={() => setShowEditModal(true)} className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors" data-testid="edit-vehicle-btn"><Edit size={14} /> Edit</button>
+          {isEditing ? (
+            <>
+              <button type="button" onClick={cancelEdit} className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">Cancel</button>
+              <button type="button" onClick={saveEdit} disabled={saving} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 transition-colors" data-testid="save-vehicle-btn">
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            </>
+          ) : (
+            <button onClick={() => { setIsEditing(true); setActiveTab("overview"); }} className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors" data-testid="edit-vehicle-btn"><Edit size={14} /> Edit</button>
+          )}
           <button onClick={loadQR} className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors" data-testid="qr-btn"><QrCode size={14} /> QR Label</button>
         </div>
       </div>
@@ -315,7 +328,95 @@ export default function VehicleDetail() {
 
         <div className="p-5">
           {/* Overview Tab */}
-          {activeTab === "overview" && (
+          {activeTab === "overview" && (isEditing ? (
+            <form onSubmit={saveEdit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                {[["Brand","brand","text"],["Model","model","text"],["Year","year","number"],["Engine CC","engine_cc","number"],["Purchase Price","purchase_price","number"],["Selling Price","selling_price","number"]].map(([label, key, type]) => (
+                  <div key={key}>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+                    <input type={type} value={editForm[key] || ""} onChange={e => setEditForm({ ...editForm, [key]: e.target.value })} className={inp} />
+                  </div>
+                ))}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Registration Number<span className="text-red-500 ml-0.5">*</span></label>
+                  <input
+                    data-testid="edit-registration-number-input"
+                    value={editForm.registration_number || ""}
+                    onChange={e => setEditForm({ ...editForm, registration_number: e.target.value })}
+                    placeholder="e.g. Ba 1 Pa 1234"
+                    className={inp}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
+                  <select value={editForm.status} onChange={e => setEditForm({ ...editForm, status: e.target.value })} className={sel}>
+                    {VEHICLE_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Condition</label>
+                  <select value={editForm.condition} onChange={e => setEditForm({ ...editForm, condition: e.target.value })} className={sel}>
+                    {CONDITIONS.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Type</label>
+                  <select data-testid="edit-vehicle-type-select" value={editForm.vehicle_type || "bike"} onChange={e => setEditForm({ ...editForm, vehicle_type: e.target.value })} className={sel}>
+                    <option value="bike">Bike</option>
+                    <option value="scooter">Scooter</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Fuel Type</label>
+                  <select value={editForm.fuel_type || "Petrol"} onChange={e => setEditForm({ ...editForm, fuel_type: e.target.value })} className={sel}>
+                    {FUEL_TYPES.map(f => <option key={f}>{f}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Ownership Number</label>
+                  <select value={editForm.ownership_number || 1} onChange={e => setEditForm({ ...editForm, ownership_number: Number(e.target.value) })} className={sel}>
+                    {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}{["st", "nd", "rd"][n - 1] || "th"} Owner</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Color</label>
+                  <input value={editForm.color || ""} onChange={e => setEditForm({ ...editForm, color: e.target.value })} placeholder="e.g. Red, Black" className={inp} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Purchase Source</label>
+                  <select value={editForm.purchase_source || ""} onChange={e => setEditForm({ ...editForm, purchase_source: e.target.value })} className={sel}>
+                    <option value="">Select Source</option>
+                    {SOURCES.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Purchased From (Name)</label>
+                  <VendorAutocomplete
+                    value={editForm.purchase_from || ""}
+                    onChange={(name, vendorId) => setEditForm({ ...editForm, purchase_from: name, vendor_id: vendorId || editForm.vendor_id })}
+                    placeholder="Type vendor name to search..."
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Purchase Date (BS)</label>
+                  <BSDatePicker
+                    value={editForm.purchase_date || ""}
+                    onChange={val => setEditForm({ ...editForm, purchase_date: val })}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+                <textarea
+                  value={editForm.notes || ""}
+                  onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
+                  placeholder="Additional notes..."
+                  rows={2}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+            </form>
+          ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
               {[
                 ["Registration", vehicle.registration_number || "Not entered"],
@@ -339,7 +440,7 @@ export default function VehicleDetail() {
                 </div>
               )}
             </div>
-          )}
+          ))}
 
           {/* Expenses Tab */}
           {activeTab === "expenses" && (
@@ -434,16 +535,6 @@ export default function VehicleDetail() {
           setForm={setJobForm}
           saving={saving}
           mechanics={mechanics}
-        />
-      )}
-
-      {showEditModal && (
-        <EditVehicleModal
-          onClose={() => setShowEditModal(false)}
-          onSubmit={saveEdit}
-          form={editForm}
-          setForm={setEditForm}
-          saving={saving}
         />
       )}
 
