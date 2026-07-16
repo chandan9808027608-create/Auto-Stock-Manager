@@ -240,79 +240,6 @@ export default function VehicleDetail() {
         })}
       </div>
 
-      {/* Vehicle Photos */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5" data-testid="photos-section">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-bold text-slate-900" style={{ fontFamily: "Manrope" }}>Vehicle Photos</h2>
-          <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${uploadingPhoto ? "bg-slate-200 text-slate-500" : "bg-blue-600 hover:bg-blue-700 text-white"}`} data-testid="upload-photo-btn">
-            {uploadingPhoto ? "Uploading..." : "+ Add Photo"}
-            <input type="file" accept="image/*" className="hidden" disabled={uploadingPhoto} onChange={e => { if (e.target.files[0]) uploadPhoto(e.target.files[0]); e.target.value = ""; }} />
-          </label>
-        </div>
-        {photos.length === 0 ? (
-          <div className="border-2 border-dashed border-slate-200 rounded-xl h-32 flex flex-col items-center justify-center text-slate-400">
-            <p className="text-sm font-medium">No photos yet</p>
-            <p className="text-xs mt-0.5">Click &quot;+ Add Photo&quot; to upload</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
-            {photos.map(photo => (
-              <div key={photo.id} className="relative group rounded-xl overflow-hidden aspect-square bg-slate-100" data-testid="vehicle-photo">
-                <img src={photo.url} alt="Vehicle" className="w-full h-full object-cover" />
-                <button onClick={() => deletePhoto(photo.id)} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold" data-testid="delete-photo-btn">
-                  Delete
-                </button>
-              </div>
-            ))}
-            <label className="border-2 border-dashed border-slate-200 rounded-xl aspect-square flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-blue-400 hover:text-blue-500 transition-colors">
-              <Plus size={20} />
-              <span className="text-xs mt-1">Add</span>
-              <input type="file" accept="image/*" className="hidden" onChange={e => { if (e.target.files[0]) uploadPhoto(e.target.files[0]); e.target.value = ""; }} />
-            </label>
-          </div>
-        )}
-      </div>
-
-      {/* Document Status + Upload */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-        <h2 className="text-sm font-bold text-slate-900 mb-3" style={{ fontFamily: "Manrope" }}>Legal Documents</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          {[["bluebook", "Bluebook"], ["insurance", "Insurance"], ["tax_clearance", "Tax Clearance"], ["transfer", "Transfer"]].map(([key, label]) => {
-            const status = vehicle[`${key}_status`];
-            const docs = legalDocs.filter(d => d.doc_type === key);
-            return (
-              <div key={key} className="border border-slate-100 rounded-xl p-3">
-                <DocCard label={label} status={status} />
-                <label className={`mt-2 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors w-full ${uploadingDoc ? "bg-slate-100 text-slate-400" : "bg-blue-50 hover:bg-blue-100 text-blue-700"}`} data-testid={`upload-doc-${key}-btn`}>
-                  + Upload
-                  <input type="file" accept="image/*,.pdf" className="hidden" disabled={uploadingDoc} onChange={e => { if (e.target.files[0]) uploadDoc(e.target.files[0], key); e.target.value = ""; }} />
-                </label>
-                {docs.map(doc => (
-                  <div key={doc.id} className="mt-1.5 flex items-center justify-between bg-slate-50 rounded-lg px-2 py-1" data-testid="uploaded-doc">
-                    <a href={doc.url} download={doc.original_name} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline truncate max-w-[80px]">{doc.original_name}</a>
-                    <button onClick={() => deleteDoc(doc.id)} className="text-red-400 hover:text-red-600 ml-1 flex-shrink-0" title="Delete"><Trash2 size={11} /></button>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-        {/* Other documents */}
-        {legalDocs.filter(d => d.doc_type === "other").length > 0 && (
-          <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Other Documents</p>
-            <div className="space-y-1">
-              {legalDocs.filter(d => d.doc_type === "other").map(doc => (
-                <div key={doc.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2" data-testid="uploaded-doc-other">
-                  <a href={doc.url} download={doc.original_name} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline truncate">{doc.original_name}</a>
-                  <button onClick={() => deleteDoc(doc.id)} className="text-red-400 hover:text-red-600 ml-2 flex-shrink-0"><Trash2 size={13} /></button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* Tabs */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex border-b border-slate-100">
@@ -502,6 +429,79 @@ export default function VehicleDetail() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Vehicle Photos */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5" data-testid="photos-section">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-bold text-slate-900" style={{ fontFamily: "Manrope" }}>Vehicle Photos</h2>
+          <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${uploadingPhoto ? "bg-slate-200 text-slate-500" : "bg-blue-600 hover:bg-blue-700 text-white"}`} data-testid="upload-photo-btn">
+            {uploadingPhoto ? "Uploading..." : "+ Add Photo"}
+            <input type="file" accept="image/*" className="hidden" disabled={uploadingPhoto} onChange={e => { if (e.target.files[0]) uploadPhoto(e.target.files[0]); e.target.value = ""; }} />
+          </label>
+        </div>
+        {photos.length === 0 ? (
+          <div className="border-2 border-dashed border-slate-200 rounded-xl h-32 flex flex-col items-center justify-center text-slate-400">
+            <p className="text-sm font-medium">No photos yet</p>
+            <p className="text-xs mt-0.5">Click &quot;+ Add Photo&quot; to upload</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+            {photos.map(photo => (
+              <div key={photo.id} className="relative group rounded-xl overflow-hidden aspect-square bg-slate-100" data-testid="vehicle-photo">
+                <img src={photo.url} alt="Vehicle" className="w-full h-full object-cover" />
+                <button onClick={() => deletePhoto(photo.id)} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold" data-testid="delete-photo-btn">
+                  Delete
+                </button>
+              </div>
+            ))}
+            <label className="border-2 border-dashed border-slate-200 rounded-xl aspect-square flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-blue-400 hover:text-blue-500 transition-colors">
+              <Plus size={20} />
+              <span className="text-xs mt-1">Add</span>
+              <input type="file" accept="image/*" className="hidden" onChange={e => { if (e.target.files[0]) uploadPhoto(e.target.files[0]); e.target.value = ""; }} />
+            </label>
+          </div>
+        )}
+      </div>
+
+      {/* Document Status + Upload */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+        <h2 className="text-sm font-bold text-slate-900 mb-3" style={{ fontFamily: "Manrope" }}>Legal Documents</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          {[["bluebook", "Bluebook"], ["insurance", "Insurance"], ["tax_clearance", "Tax Clearance"], ["transfer", "Transfer"]].map(([key, label]) => {
+            const status = vehicle[`${key}_status`];
+            const docs = legalDocs.filter(d => d.doc_type === key);
+            return (
+              <div key={key} className="border border-slate-100 rounded-xl p-3">
+                <DocCard label={label} status={status} />
+                <label className={`mt-2 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors w-full ${uploadingDoc ? "bg-slate-100 text-slate-400" : "bg-blue-50 hover:bg-blue-100 text-blue-700"}`} data-testid={`upload-doc-${key}-btn`}>
+                  + Upload
+                  <input type="file" accept="image/*,.pdf" className="hidden" disabled={uploadingDoc} onChange={e => { if (e.target.files[0]) uploadDoc(e.target.files[0], key); e.target.value = ""; }} />
+                </label>
+                {docs.map(doc => (
+                  <div key={doc.id} className="mt-1.5 flex items-center justify-between bg-slate-50 rounded-lg px-2 py-1" data-testid="uploaded-doc">
+                    <a href={doc.url} download={doc.original_name} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline truncate max-w-[80px]">{doc.original_name}</a>
+                    <button onClick={() => deleteDoc(doc.id)} className="text-red-400 hover:text-red-600 ml-1 flex-shrink-0" title="Delete"><Trash2 size={11} /></button>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+        {/* Other documents */}
+        {legalDocs.filter(d => d.doc_type === "other").length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Other Documents</p>
+            <div className="space-y-1">
+              {legalDocs.filter(d => d.doc_type === "other").map(doc => (
+                <div key={doc.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2" data-testid="uploaded-doc-other">
+                  <a href={doc.url} download={doc.original_name} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline truncate">{doc.original_name}</a>
+                  <button onClick={() => deleteDoc(doc.id)} className="text-red-400 hover:text-red-600 ml-2 flex-shrink-0"><Trash2 size={13} /></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modals */}
