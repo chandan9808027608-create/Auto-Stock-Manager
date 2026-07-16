@@ -459,10 +459,8 @@ def _parse_flexible_date(val) -> str:
             continue
     return s
 
-@api_router.post("/vehicles/import")
-async def import_vehicles(file: UploadFile = File(...), cu: dict = Depends(get_current_user)):
-    filename = (file.filename or "").lower()
-    content = await file.read()
+def _parse_vehicle_import_rows(content: bytes, filename: str, created_by: str):
+    filename = (filename or "").lower()
     rows: List[list] = []
 
     if filename.endswith(".csv"):
@@ -491,6 +489,7 @@ async def import_vehicles(file: UploadFile = File(...), cu: dict = Depends(get_c
 
     docs = []
     errors = []
+    row_results = []
     total_data_rows = 0
     for sheet_row_num, row in enumerate(rows[1:], start=2):
         if all(c is None or str(c).strip() == "" for c in row):
@@ -498,9 +497,12 @@ async def import_vehicles(file: UploadFile = File(...), cu: dict = Depends(get_c
         total_data_rows += 1
         row = list(row) + [None] * (len(headers) - len(row))
         record = dict(zip(headers, row))
+        summary = f"{_import_cell_str(record, 'brand') or ''} {_import_cell_str(record, 'model') or ''}".strip() or "(unnamed)"
         missing = [f for f in IMPORT_REQUIRED_FIELDS if _import_cell_str(record, f) is None]
         if missing:
-            errors.append({"row": sheet_row_num, "reason": f"Missing required field(s): {', '.join(missing)}"})
+            reason = f"Missing required field(s): {', '.join(missing)}"
+            errors.append({"row": sheet_row_num, "reason": reason})
+            row_results.append({"row": sheet_row_num, "vehicle": summary, "status": "error", "reason": reason})
             continue
         try:
             purchase_date = _parse_flexible_date(record.get("purchase_date"))
@@ -544,27 +546,65 @@ async def import_vehicles(file: UploadFile = File(...), cu: dict = Depends(get_c
                 "salesperson_id": None, "salesperson_name": None, "discount": 0,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
-                "created_by": cu["username"],
+                "created_by": created_by,
             }
             docs.append(doc)
+            row_results.append({"row": sheet_row_num, "vehicle": summary, "status": "ok", "reason": None})
         except (ValueError, TypeError) as e:
-            errors.append({"row": sheet_row_num, "reason": f"Invalid value: {e}"})
+            reason = f"Invalid value: {e}"
+            errors.append({"row": sheet_row_num, "reason": reason})
+            row_results.append({"row": sheet_row_num, "vehicle": summary, "status": "error", "reason": reason})
+
+    return docs, errors, row_results, total_data_rows
+
+
+@api_router.post("/vehicles/import")
+async def import_vehicles(file: UploadFile = File(...), confirm: bool = False, cu: dict = Depends(get_current_user)):
+    content = await file.read()
+    docs, errors, row_results, total_data_rows = _parse_vehicle_import_rows(content, file.filename, cu["username"])
+
+    if errors:
+        return {
+            "committed": False,
+            "all_success": False,
+            "inserted": 0,
+            "skipped": len(errors),
+            "total_rows": total_data_rows,
+            "rows": row_results,
+            "errors": errors[:200],
+            "message": f"{len(errors)} of {total_data_rows} row(s) failed validation. Fix them and re-upload — nothing was imported.",
+        }
+
+    if not confirm:
+        return {
+            "committed": False,
+            "all_success": True,
+            "inserted": 0,
+            "skipped": 0,
+            "total_rows": total_data_rows,
+            "rows": row_results,
+            "errors": [],
+            "message": f"All {total_data_rows} row(s) validated successfully. Confirm to import.",
+        }
 
     inserted = 0
-    if docs:
-        for i in range(0, len(docs), 500):
-            batch = docs[i:i + 500]
-            result = await db.vehicles.insert_many(batch, ordered=False)
-            inserted += len(result.inserted_ids)
-        await db.audit_logs.insert_one({"action": "vehicles_bulk_imported",
-            "user": cu["username"], "timestamp": datetime.now(timezone.utc).isoformat(),
-            "details": f"Imported {inserted} vehicles via bulk import from {file.filename}"})
+    for i in range(0, len(docs), 500):
+        batch = docs[i:i + 500]
+        result = await db.vehicles.insert_many(batch, ordered=False)
+        inserted += len(result.inserted_ids)
+    await db.audit_logs.insert_one({"action": "vehicles_bulk_imported",
+        "user": cu["username"], "timestamp": datetime.now(timezone.utc).isoformat(),
+        "details": f"Imported {inserted} vehicles via bulk import from {file.filename}"})
 
     return {
+        "committed": True,
+        "all_success": True,
         "inserted": inserted,
-        "skipped": len(errors),
+        "skipped": 0,
         "total_rows": total_data_rows,
-        "errors": errors[:50],
+        "rows": row_results,
+        "errors": [],
+        "message": f"Imported {inserted} vehicle{'s' if inserted != 1 else ''} successfully.",
     }
 
 @api_router.get("/vehicles/{vid}")
