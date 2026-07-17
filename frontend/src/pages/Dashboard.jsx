@@ -12,8 +12,12 @@ import {
 // ── Sub-components defined OUTSIDE to prevent remount ──────────────────
 const AGING_COLORS = { fresh: "#22c55e", normal: "#eab308", slow: "#f97316", dead: "#ef4444" };
 
-const KPICard = ({ title, value, subtitle, icon: Icon, color, testid }) => (
-  <div data-testid={testid} className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-shadow duration-200 animate-fade-in">
+const KPICard = ({ title, value, subtitle, icon: Icon, color, testid, onClick }) => (
+  <div
+    data-testid={testid}
+    onClick={onClick}
+    className={`bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-shadow duration-200 animate-fade-in ${onClick ? "cursor-pointer" : ""}`}
+  >
     <div className="flex items-start justify-between">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">{title}</p>
@@ -209,7 +213,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard title="Available Vehicles" value={stats.available} icon={Package} color="bg-blue-500" testid="kpi-available" />
         <KPICard title="Vehicles Sold" value={stats.sold} icon={ShoppingCart} color="bg-green-500" testid="kpi-sold" />
-        <KPICard title="Locked Capital" value={formatNPR(stats.locked_capital)} icon={DollarSign} color="bg-indigo-500" testid="kpi-capital" subtitle="In available stock" />
+        <KPICard title="Locked Capital" value={formatNPR(stats.locked_capital)} icon={DollarSign} color="bg-indigo-500" testid="kpi-capital" subtitle="In available stock" onClick={() => navigate("/inventory")} />
         <KPICard title="Realized Profit" value={formatNPR(stats.total_realized_profit)} icon={TrendingUp} color="bg-emerald-500" testid="kpi-profit" subtitle="From sold vehicles" />
       </div>
 
