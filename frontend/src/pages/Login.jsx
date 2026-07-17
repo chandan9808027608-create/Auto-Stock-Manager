@@ -82,10 +82,6 @@ export default function Login() {
               {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
-
-          <div className="mt-5 p-3 bg-slate-50 rounded-lg text-xs text-slate-500">
-            Default: <span className="font-mono font-medium text-slate-700">admin</span> / <span className="font-mono font-medium text-slate-700">admin123</span>
-          </div>
         </div>
       </div>
     </div>
