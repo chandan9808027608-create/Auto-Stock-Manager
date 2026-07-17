@@ -304,7 +304,12 @@ export default function Sales() {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filtered.map(s => (
-                  <tr key={s.id} data-testid="sale-row" className="hover:bg-slate-50 transition-colors">
+                  <tr
+                    key={s.id}
+                    data-testid="sale-row"
+                    onClick={() => isAdmin && openEditModal(s)}
+                    className={`transition-colors ${isAdmin ? "table-row-hover cursor-pointer" : "hover:bg-slate-50"}`}
+                  >
                     <td className="px-4 py-3">
                       <div className="font-semibold text-slate-900 text-sm">{s.vehicle_info || "—"}</div>
                     </td>
@@ -331,10 +336,10 @@ export default function Sales() {
                     <td className="px-4 py-3">
                       {isAdmin ? (
                         <div className="flex items-center gap-1">
-                          <button onClick={() => openEditModal(s)} className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" data-testid="edit-sale-btn">
+                          <button onClick={e => { e.stopPropagation(); openEditModal(s); }} className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors" data-testid="edit-sale-btn">
                             <Pencil size={14} className="text-blue-500" />
                           </button>
-                          <button onClick={() => handleDelete(s.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" data-testid="delete-sale-btn">
+                          <button onClick={e => { e.stopPropagation(); handleDelete(s.id); }} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" data-testid="delete-sale-btn">
                             <Trash2 size={14} className="text-red-400" />
                           </button>
                         </div>
