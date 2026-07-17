@@ -76,10 +76,12 @@ ROLE_PERMISSIONS = {
         "customers": {"view", "create", "edit", "delete"},
         "sales": {"view", "create"},
         "team": {"view", "create", "edit", "delete"},
+        "vendor_lookup": {"view"},  # read-only autocomplete when picking a vehicle's purchase source
     },
     "parts_supervisor": {  # Parts department
         "spare_parts": {"view", "create", "edit", "delete"},
         "jobs": {"view", "create", "edit"},
+        "vendor_lookup": {"view", "create"},  # supplier picker + inline "add new vendor" on a part
     },
 }
 
@@ -1095,7 +1097,7 @@ async def get_vendors(cu: dict = Depends(admin_only)):
     return vendors
 
 @api_router.post("/vendors")
-async def create_vendor(vendor: VendorCreate, cu: dict = Depends(admin_only)):
+async def create_vendor(vendor: VendorCreate, cu: dict = Depends(require("vendor_lookup", "create"))):
     v = vendor.model_dump()
     v["id"] = str(uuid.uuid4()); v["created_at"] = datetime.now(timezone.utc).isoformat()
     await db.vendors.insert_one(v)
@@ -1115,7 +1117,7 @@ async def delete_vendor(vid: str, cu: dict = Depends(admin_only)):
     return {"message": "Deleted"}
 
 @api_router.get("/vendors/search")
-async def search_vendors(q: str = "", cu: dict = Depends(admin_only)):
+async def search_vendors(q: str = "", cu: dict = Depends(require("vendor_lookup", "view"))):
     """Fast vendor name search for autocomplete."""
     vendors = await db.vendors.find({}, {"_id": 0, "id": 1, "name": 1, "phone": 1}).to_list(200)
     if q:
