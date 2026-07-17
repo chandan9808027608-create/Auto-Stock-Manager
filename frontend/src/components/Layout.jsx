@@ -36,7 +36,7 @@ export default function Layout() {
   const visibleNavItems = navItems.filter(({ path }) => canAccessPath(user?.role, path));
 
   const Sidebar = ({ mobile = false }) => (
-    <aside className={`${mobile ? "fixed inset-0 z-50 flex" : "hidden lg:flex"} flex-col bg-slate-900 text-white ${mobile ? "w-64" : "w-64"} min-h-screen`}>
+    <aside className={`${mobile ? "fixed inset-0 z-50 flex" : "hidden lg:flex"} flex-col bg-slate-900 text-white ${mobile ? "w-64" : "w-64"} h-screen`}>
       {/* Logo */}
       <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-700">
         <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white text-sm">GG</div>
@@ -93,7 +93,7 @@ export default function Layout() {
   );
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-slate-50">
       {/* Desktop Sidebar */}
       <Sidebar />
 
@@ -130,7 +130,7 @@ export default function Layout() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 p-4 lg:p-6">
+        <main className="flex-1 p-4 lg:p-6 overflow-y-auto">
           <Outlet />
         </main>
       </div>
