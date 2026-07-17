@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Search, Eye, Trash2, Filter, X, UploadCloud, EyeOff } from "lucide-react";
+import { Plus, Search, Eye, Trash2, Filter, X, UploadCloud, EyeOff, Package, Wallet, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getAgingStyle, getStatusStyle, BRANDS, VEHICLE_STATUS_OPTIONS } from "../utils/helpers";
@@ -36,6 +36,8 @@ export default function Inventory() {
   const [hidingUnpriced, setHidingUnpriced] = useState(false);
 
   const unpricedVisible = vehicles.filter(v => !v.selling_price && !["sold", "unlisted", "hidden", "scrap", "in_repair"].includes(v.status));
+  const totalInvestment = filtered.reduce((sum, v) => sum + (v.total_investment || 0), 0);
+  const totalSellingPrice = filtered.reduce((sum, v) => sum + (v.selling_price || 0), 0);
 
   const hideUnpriced = async () => {
     if (unpricedVisible.length === 0) return;
@@ -219,6 +221,27 @@ export default function Inventory() {
           </select>
         </div>
       </div>
+
+      {/* Summary */}
+      {!loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[
+            { label: "Total Vehicles", value: filtered.length, icon: Package, color: "bg-blue-500" },
+            { label: "Total Investment", value: formatNPR(totalInvestment), icon: Wallet, color: "bg-indigo-500" },
+            { label: "Total Selling Price", value: formatNPR(totalSellingPrice), icon: DollarSign, color: "bg-green-500" },
+          ].map(c => (
+            <div key={c.label} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-lg ${c.color} flex items-center justify-center shrink-0`}>
+                <c.icon size={16} className="text-white" />
+              </div>
+              <div>
+                <div className="text-xs text-slate-500 font-medium">{c.label}</div>
+                <div className="text-lg font-bold text-slate-900" style={{ fontFamily: "Manrope" }}>{c.value}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
