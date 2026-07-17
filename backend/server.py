@@ -623,14 +623,48 @@ async def import_vehicles(file: UploadFile = File(...), confirm: bool = False, c
             "message": f"All {total_data_rows} row(s) validated successfully. Confirm to import.",
         }
 
+    # A row imported with status=Sold bypasses both the Sales form and the Inventory
+    # quick-status-edit path, so it needs the same auto-create-a-sale-record treatment
+    # `update_vehicle` already does for a direct Sold edit (see there for the pattern).
+    sold_docs = [d for d in docs if d.get("status") == "sold"]
+    for d in sold_docs:
+        sale_price = d.get("selling_price") or d.get("purchase_price", 0)
+        d["sold_date"] = d.get("purchase_date") or datetime.now(timezone.utc).date().isoformat()
+        if not d.get("selling_price"):
+            d["selling_price"] = sale_price
+
     inserted = 0
     for i in range(0, len(docs), 500):
         batch = docs[i:i + 500]
         result = await db.vehicles.insert_many(batch, ordered=False)
         inserted += len(result.inserted_ids)
+
+    if sold_docs:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.sales.insert_many([{
+            "id": str(uuid.uuid4()),
+            "vehicle_id": d["id"],
+            "customer_id": None,
+            "sale_price": d["selling_price"],
+            "extra_expenses": [],
+            "expenses_total": 0,
+            "total_amount": d["selling_price"],
+            "payment_method": "Due",
+            "paid_cash": 0,
+            "paid_bank": 0,
+            "due_amount": d["selling_price"],
+            "due_date": None,
+            "payment_status": "Unpaid",
+            "payment_history": [],
+            "sale_date": d["sold_date"],
+            "notes": "Auto-created: vehicle imported with status=Sold — review customer/payment details.",
+            "created_by": cu.get("username"),
+            "created_at": now_iso,
+        } for d in sold_docs])
+
     await db.audit_logs.insert_one({"action": "vehicles_bulk_imported",
         "user": cu["username"], "timestamp": datetime.now(timezone.utc).isoformat(),
-        "details": f"Imported {inserted} vehicles via bulk import from {file.filename}"})
+        "details": f"Imported {inserted} vehicles via bulk import from {file.filename}" + (f", {len(sold_docs)} auto-recorded as sales" if sold_docs else "")})
 
     return {
         "committed": True,
@@ -640,7 +674,7 @@ async def import_vehicles(file: UploadFile = File(...), confirm: bool = False, c
         "total_rows": total_data_rows,
         "rows": row_results,
         "errors": [],
-        "message": f"Imported {inserted} vehicle{'s' if inserted != 1 else ''} successfully.",
+        "message": f"Imported {inserted} vehicle{'s' if inserted != 1 else ''} successfully." + (f" {len(sold_docs)} marked Sold were added to the Sales tab too." if sold_docs else ""),
     }
 
 @api_router.get("/vehicles/{vid}")
