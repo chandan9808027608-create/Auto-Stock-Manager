@@ -717,10 +717,10 @@ async def delete_all_vehicles(confirm: str = "", cu: dict = Depends(get_current_
     result = await db.vehicles.delete_many({})
     if vehicle_ids:
         await db.expenses.delete_many({"vehicle_id": {"$in": vehicle_ids}})
-        await db.job_cards.delete_many({"vehicle_id": {"$in": vehicle_ids}})
+        # Job cards are intentionally left untouched — service history survives inventory resets.
     await db.audit_logs.insert_one({"action": "vehicles_bulk_deleted",
         "user": cu["username"], "timestamp": datetime.now(timezone.utc).isoformat(),
-        "details": f"Cleared all inventory: {result.deleted_count} vehicles deleted"})
+        "details": f"Cleared all inventory: {result.deleted_count} vehicles deleted (job cards preserved)"})
     return {"message": f"Deleted {result.deleted_count} vehicles"}
 
 @api_router.get("/vehicles/{vid}/qr-data")
