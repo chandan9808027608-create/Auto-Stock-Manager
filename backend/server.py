@@ -11,6 +11,8 @@ from pathlib import Path
 import os, logging, jwt, uuid, json, base64, io
 from pydantic import BaseModel
 from PIL import Image, ImageOps
+from google import genai
+from google.genai import types as genai_types
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -33,6 +35,11 @@ client = AsyncIOMotorClient(
 db = client[os.environ['DB_NAME']]
 
 JWT_SECRET = os.environ.get('JWT_SECRET', 'hamro-gng-2024')
+
+# ── AI Assistant (Google Gemini) ────────────────────────────────────────
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+AI_MODEL = "gemini-3.5-flash"
+ai_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 app = FastAPI(title="Hamro G&G Auto OS", version="1.0.0")
 api_router = APIRouter(prefix="/api")
@@ -190,6 +197,138 @@ async def _build_suggestions_context(context_type: str) -> dict:
         vendors = await db.vendors.find({}, {"_id": 0}).to_list(20)
         return {"total_vendors": len(vendors), "vendors_with_due": sum(1 for _ in vendors)}
     return {}
+
+# ── AI Assistant (Gemini-powered) ──────────────────────────────────────
+class AIChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+
+class AIVehicleInput(BaseModel):
+    brand: str; model: str; year: int
+    engine_cc: Optional[int] = None
+    fuel_type: Optional[str] = "Petrol"
+    condition: Optional[str] = "Good"
+    ownership_number: Optional[int] = 1
+    kilometer_run: Optional[int] = None
+    purchase_price: Optional[float] = None
+
+class AIPriceRequest(BaseModel):
+    vehicle: AIVehicleInput
+
+class AISuggestionsRequest(BaseModel):
+    context_type: str
+    additional_context: Optional[str] = None
+
+MARKDOWN_NOTE = 'Format your reply as plain text with **bold** for emphasis and "- " for bullet points only — no headers, links, or tables.'
+
+async def _ai_text(system: str, contents, max_tokens: int = 1024) -> str:
+    if not ai_client:
+        raise HTTPException(503, "AI Assistant is not configured. Set GEMINI_API_KEY on the server.")
+    resp = await ai_client.aio.models.generate_content(
+        model=AI_MODEL, contents=contents,
+        config=genai_types.GenerateContentConfig(system_instruction=system, max_output_tokens=max_tokens),
+    )
+    return resp.text or ""
+
+@api_router.post("/ai/chatbot")
+async def ai_chatbot(req: AIChatRequest, cu: dict = Depends(admin_only)):
+    session_id = req.session_id or str(uuid.uuid4())
+    session = await db.ai_chat_sessions.find_one({"id": session_id}, {"_id": 0})
+    history = session["messages"] if session else []  # stored as [{"role": "user"|"assistant", "text": "..."}]
+
+    settings = await db.settings.find_one({"id": "general"}, {"_id": 0}) or {}
+    avail = await db.vehicles.find({"status": "available"}, {"_id": 0}).sort("created_at", -1).to_list(40)
+    stock_lines = "\n".join(
+        f"- {v.get('brand')} {v.get('model')} {v.get('year')} · {v.get('kilometer_run') or '?'}km · "
+        f"{'Rs. ' + str(v['selling_price']) if v.get('selling_price') else 'price on request'}"
+        for v in avail
+    ) or "No vehicles currently in stock."
+
+    system = (
+        f"You are the sales assistant chatbot for {settings.get('business_name', 'Hamro G n G Auto')}, "
+        "a used motorbike/scooter dealership in Nepal. Prices are in NPR. Be warm, concise, and helpful. "
+        "Only discuss vehicles, prices, financing, and dealership services — politely decline unrelated requests.\n"
+        f"Current available stock:\n{stock_lines}\n\n{MARKDOWN_NOTE}"
+    )
+    messages = history + [{"role": "user", "text": req.message}]
+    # Gemini's role name for assistant turns is "model", not "assistant".
+    contents = [
+        genai_types.Content(role="model" if m["role"] == "assistant" else "user", parts=[genai_types.Part.from_text(text=m["text"])])
+        for m in messages
+    ]
+    reply = await _ai_text(system, contents)
+    messages.append({"role": "assistant", "text": reply})
+
+    await db.ai_chat_sessions.update_one(
+        {"id": session_id},
+        {"$set": {"messages": messages[-20:], "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return {"reply": reply, "session_id": session_id}
+
+@api_router.post("/ai/price-suggestion")
+async def ai_price_suggestion(req: AIPriceRequest, cu: dict = Depends(admin_only)):
+    v = req.vehicle
+    similar = await db.vehicles.find(
+        {"status": "sold", "brand": {"$regex": f"^{v.brand}$", "$options": "i"}, "model": {"$regex": f"^{v.model}$", "$options": "i"}},
+        {"_id": 0, "year": 1, "selling_price": 1, "kilometer_run": 1, "condition": 1, "sold_date": 1},
+    ).sort("sold_date", -1).to_list(10)
+
+    history_lines = "\n".join(
+        f"- {s.get('year')} · {s.get('kilometer_run') or '?'}km · {s.get('condition') or '?'} condition · sold for Rs. {s.get('selling_price')}"
+        for s in similar
+    ) or "No sold-history records for this brand/model in this dealership."
+
+    system = (
+        "You are a pricing analyst for a Nepali used-motorbike dealership. Recommend a selling price range in NPR "
+        "for the vehicle described, reasoning from the sold-history comparables given and the general Nepal used-bike market. "
+        f"{MARKDOWN_NOTE}"
+    )
+    prompt = (
+        f"Vehicle to price: {v.brand} {v.model} {v.year}, {v.engine_cc or '?'}cc {v.fuel_type}, "
+        f"{v.ownership_number}{'st' if v.ownership_number == 1 else 'th'} owner, {v.kilometer_run or '?'}km, "
+        f"condition: {v.condition}, purchase price: Rs. {v.purchase_price or 'unknown'}.\n\n"
+        f"Similar sold vehicles from this dealership's history:\n{history_lines}\n\n"
+        "Give a recommended selling price range and a brief justification."
+    )
+    suggestion = await _ai_text(system, prompt)
+    return {"suggestion": suggestion, "sold_history_count": len(similar)}
+
+@api_router.get("/ai/festival-intelligence")
+async def ai_festival_intelligence(cu: dict = Depends(admin_only)):
+    avail = await db.vehicles.find({"status": "available"}, {"_id": 0, "brand": 1}).to_list(1000)
+    stock_snapshot: dict = {}
+    for v in avail:
+        b = v.get("brand") or "Other"
+        stock_snapshot[b] = stock_snapshot.get(b, 0) + 1
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    system = (
+        "You are a business intelligence advisor for a Nepali used-motorbike dealership. Nepali festivals "
+        "(Dashain, Tihar, etc.) fall on the lunar Bikram Sambat calendar and shift each Gregorian year — give "
+        f"approximate timing and say so explicitly rather than exact dates. {MARKDOWN_NOTE}"
+    )
+    prompt = (
+        f"Today's date: {today}. Current available stock by brand: {json.dumps(stock_snapshot)}.\n\n"
+        "Identify the nearest major upcoming Nepali festival(s) and give stock and pricing strategy advice for "
+        "a used-bike dealership heading into that season — which brands/segments to push, and any pricing moves."
+    )
+    intelligence = await _ai_text(system, prompt)
+    return {"intelligence": intelligence, "stock_snapshot": stock_snapshot}
+
+@api_router.post("/ai/suggestions")
+async def ai_suggestions(req: AISuggestionsRequest, cu: dict = Depends(admin_only)):
+    context = await _build_suggestions_context(req.context_type)
+    system = (
+        "You are a business advisor for a Nepali used-motorbike dealership. Give concrete, actionable "
+        f"recommendations grounded only in the data provided — do not invent numbers not given. {MARKDOWN_NOTE}"
+    )
+    prompt = f"Context ({req.context_type}): {json.dumps(context)}\n"
+    if req.additional_context:
+        prompt += f"\nAdditional note from the owner: {req.additional_context}\n"
+    prompt += "\nGive your recommendations."
+    suggestions = await _ai_text(system, prompt)
+    return {"suggestions": suggestions}
 
 
 class LoginRequest(BaseModel):

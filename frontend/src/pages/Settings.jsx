@@ -148,7 +148,7 @@ export default function Settings() {
             ["Business", "Hamro G n G Auto"],
             ["Version", "1.0.0"],
             ["Currency", "NPR (Nepalese Rupee)"],
-            ["AI Engine", "Gemini 3 Flash"],
+            ["AI Engine", "Google Gemini"],
             ["Database", "MongoDB"],
           ].map(([k, v]) => (
             <div key={k} className="flex justify-between py-2 border-b border-slate-50 last:border-0">

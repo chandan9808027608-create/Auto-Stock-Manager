@@ -195,7 +195,7 @@ function AdvisorTab() {
     try {
       const r = await api.post("/ai/suggestions", { context_type: context, additional_context: note || null });
       setResult(r.data);
-    } catch (e) { toast.error("AI error"); }
+    } catch (e) { toast.error(e.response?.data?.detail || "AI error"); }
     finally { setLoading(false); }
   };
 
@@ -262,7 +262,8 @@ function ChatbotTab() {
       sessionId.current = r.data.session_id || sessionId.current;
     } catch (err) {
       console.error("Chatbot error:", err);
-      setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, text: "Sorry, I couldn't connect. Please try again.", typing: false } : m));
+      const detail = err.response?.data?.detail || "Sorry, I couldn't connect. Please try again.";
+      setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, text: detail, typing: false } : m));
     } finally {
       setLoading(false);
     }
