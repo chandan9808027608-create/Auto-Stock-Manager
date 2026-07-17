@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { canAccessPath } from "../utils/permissions";
 import {
   LayoutDashboard, Bike, Wrench, Users, UsersRound,
   BarChart3, Handshake, Sparkles, Settings, LogOut, Menu, X, Bell,
@@ -32,6 +33,7 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = () => { logout(); navigate("/login"); };
+  const visibleNavItems = navItems.filter(({ path }) => canAccessPath(user?.role, path));
 
   const Sidebar = ({ mobile = false }) => (
     <aside className={`${mobile ? "fixed inset-0 z-50 flex" : "hidden lg:flex"} flex-col bg-slate-900 text-white ${mobile ? "w-64" : "w-64"} min-h-screen`}>
@@ -51,7 +53,7 @@ export default function Layout() {
 
       {/* Nav */}
       <nav className="flex-1 py-4 px-3 space-y-0.5 sidebar-nav overflow-y-auto">
-        {navItems.map(({ path, label, icon: Icon }) => (
+        {visibleNavItems.map(({ path, label, icon: Icon }) => (
           <NavLink
             key={path}
             to={path}

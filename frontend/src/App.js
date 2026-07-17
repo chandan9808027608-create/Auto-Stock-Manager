@@ -2,6 +2,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { canAccessPath, ROLE_DEFAULT_PATH } from "./utils/permissions";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -33,28 +34,46 @@ const PublicRoute = ({ children }) => {
   return !(user && token) ? children : <Navigate to="/" replace />;
 };
 
+// Blocks direct URL navigation into a tab the user's role doesn't grant
+// (nav already hides the link, but that's not a security boundary on its own).
+const RoleRoute = ({ path, children }) => {
+  const { user } = useAuth();
+  if (!canAccessPath(user?.role, path)) {
+    return <Navigate to={ROLE_DEFAULT_PATH[user?.role] || "/"} replace />;
+  }
+  return children;
+};
+
+const HomeRoute = () => {
+  const { user } = useAuth();
+  if (user?.role && user.role !== "admin") {
+    return <Navigate to={ROLE_DEFAULT_PATH[user.role] || "/settings"} replace />;
+  }
+  return <Dashboard />;
+};
+
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route index element={<Dashboard />} />
-        <Route path="inventory" element={<Inventory />} />
-        <Route path="inventory/:id" element={<VehicleDetail />} />
-        <Route path="import-stock" element={<ImportStock />} />
-        <Route path="jobs" element={<JobCards />} />
-        <Route path="customers" element={<Customers />} />
-        <Route path="team" element={<Team />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="partners" element={<Partners />} />
-        <Route path="vendors" element={<Vendors />} />
-        <Route path="leads" element={<Leads />} />
-        <Route path="finance" element={<Finance />} />
-        <Route path="marketing" element={<Marketing />} />
-        <Route path="emi" element={<EMI />} />
-        <Route path="spare-parts" element={<SpareParts />} />
-        <Route path="sales" element={<Sales />} />
-        <Route path="ai" element={<AIAssistant />} />
+        <Route index element={<HomeRoute />} />
+        <Route path="inventory" element={<RoleRoute path="/inventory"><Inventory /></RoleRoute>} />
+        <Route path="inventory/:id" element={<RoleRoute path="/inventory/detail"><VehicleDetail /></RoleRoute>} />
+        <Route path="import-stock" element={<RoleRoute path="/import-stock"><ImportStock /></RoleRoute>} />
+        <Route path="jobs" element={<RoleRoute path="/jobs"><JobCards /></RoleRoute>} />
+        <Route path="customers" element={<RoleRoute path="/customers"><Customers /></RoleRoute>} />
+        <Route path="team" element={<RoleRoute path="/team"><Team /></RoleRoute>} />
+        <Route path="reports" element={<RoleRoute path="/reports"><Reports /></RoleRoute>} />
+        <Route path="partners" element={<RoleRoute path="/partners"><Partners /></RoleRoute>} />
+        <Route path="vendors" element={<RoleRoute path="/vendors"><Vendors /></RoleRoute>} />
+        <Route path="leads" element={<RoleRoute path="/leads"><Leads /></RoleRoute>} />
+        <Route path="finance" element={<RoleRoute path="/finance"><Finance /></RoleRoute>} />
+        <Route path="marketing" element={<RoleRoute path="/marketing"><Marketing /></RoleRoute>} />
+        <Route path="emi" element={<RoleRoute path="/emi"><EMI /></RoleRoute>} />
+        <Route path="spare-parts" element={<RoleRoute path="/spare-parts"><SpareParts /></RoleRoute>} />
+        <Route path="sales" element={<RoleRoute path="/sales"><Sales /></RoleRoute>} />
+        <Route path="ai" element={<RoleRoute path="/ai"><AIAssistant /></RoleRoute>} />
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

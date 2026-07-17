@@ -6,6 +6,7 @@ import api from "../utils/api";
 import { formatNPR, getAgingStyle, getStatusStyle, BRANDS, VEHICLE_STATUS_OPTIONS } from "../utils/helpers";
 import { AddVehicleModal } from "./AddVehicleModal";
 import HoverADDate from "../components/HoverADDate";
+import { useAuth } from "../context/AuthContext";
 
 const STATUSES = ["all", ...VEHICLE_STATUS_OPTIONS.map(o => o.value)];
 
@@ -18,6 +19,8 @@ const EMPTY = {
 
 export default function Inventory() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = !user?.role || user.role === "admin";
   const [searchParams, setSearchParams] = useSearchParams();
   const [vehicles, setVehicles] = useState([]);
   const [filtered, setFiltered] = useState([]);
@@ -300,13 +303,15 @@ export default function Inventory() {
                           >
                             <Eye size={15} className="text-slate-500" />
                           </button>
-                          <button
-                            onClick={e => handleDelete(v.id, e)}
-                            className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"
-                            data-testid="delete-vehicle-btn"
-                          >
-                            <Trash2 size={15} className="text-red-400" />
-                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={e => handleDelete(v.id, e)}
+                              className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"
+                              data-testid="delete-vehicle-btn"
+                            >
+                              <Trash2 size={15} className="text-red-400" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -319,15 +324,17 @@ export default function Inventory() {
       </div>
 
       {/* Import Stock */}
-      <div className="flex justify-center">
-        <button
-          onClick={() => navigate("/import-stock")}
-          data-testid="import-stock-btn"
-          className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors"
-        >
-          <UploadCloud size={16} /> Import Stock
-        </button>
-      </div>
+      {isAdmin && (
+        <div className="flex justify-center">
+          <button
+            onClick={() => navigate("/import-stock")}
+            data-testid="import-stock-btn"
+            className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            <UploadCloud size={16} /> Import Stock
+          </button>
+        </div>
+      )}
 
       {/* Add Vehicle Modal */}
       {showModal && (

@@ -4,11 +4,16 @@ import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getJobStyle } from "../utils/helpers";
 import VehicleComboBox from "../components/VehicleComboBox";
+import { useAuth } from "../context/AuthContext";
+import { canEditJobs, canDeleteJobs } from "../utils/permissions";
 
 const STATUSES = ["all", "pending", "in_progress", "completed"];
 const EMPTY_FORM = { vehicle_id: "", work_description: "", mechanic_name: "", estimated_cost: "", notes: "" };
 
 export default function JobCards() {
+  const { user } = useAuth();
+  const canEdit = canEditJobs(user?.role);
+  const canDelete = canDeleteJobs(user?.role);
   const [jobs, setJobs] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -130,9 +135,11 @@ export default function JobCards() {
           <h1 className="text-2xl font-bold text-slate-900">Job Cards</h1>
           <p className="text-sm text-slate-500">{filtered.length} records</p>
         </div>
-        <button onClick={openModal} data-testid="create-job-button" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-all active:scale-95 shadow-sm">
-          <Plus size={16} /> New Job Card
-        </button>
+        {canEdit && (
+          <button onClick={openModal} data-testid="create-job-button" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-all active:scale-95 shadow-sm">
+            <Plus size={16} /> New Job Card
+          </button>
+        )}
       </div>
 
       {/* Stats */}
@@ -219,18 +226,18 @@ export default function JobCards() {
                 {overBudget && <div className="text-xs text-red-600 font-medium mb-3">Over budget by {formatNPR(job.actual_cost - job.estimated_cost)}</div>}
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  {job.status === "pending" && (
+                  {canEdit && job.status === "pending" && (
                     <button onClick={() => updateStatus(job.id, "in_progress")} disabled={updating === job.id} className="px-2.5 py-1.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-60">
                       Start Work
                     </button>
                   )}
-                  {job.status === "in_progress" && (
+                  {canEdit && job.status === "in_progress" && (
                     <button onClick={() => { const cost = window.prompt("Enter actual cost (NPR):"); if (cost !== null) updateStatus(job.id, "completed", cost || job.estimated_cost); }} disabled={updating === job.id} className="px-2.5 py-1.5 bg-green-100 text-green-700 text-xs font-medium rounded-lg hover:bg-green-200 transition-colors disabled:opacity-60">
                       Mark Complete
                     </button>
                   )}
                   {job.status === "completed" && <span className="text-xs text-green-600 font-medium">Completed {job.completed_at?.slice(0, 10)}</span>}
-                  <button onClick={() => deleteJob(job.id)} className="ml-auto text-xs text-red-400 hover:text-red-600 transition-colors px-2 py-1">Delete</button>
+                  {canDelete && <button onClick={() => deleteJob(job.id)} className="ml-auto text-xs text-red-400 hover:text-red-600 transition-colors px-2 py-1">Delete</button>}
                 </div>
               </div>
             );

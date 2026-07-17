@@ -64,6 +64,40 @@ async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(securit
     except jwt.InvalidTokenError:
         raise HTTPException(401, "Invalid token")
 
+# ── Role-based access control ─────────────────────────────────────────
+# "admin" (Super admin) always has full access. Other roles only get what's
+# listed here as {resource: {allowed actions}}; anything not listed is denied.
+ROLE_PERMISSIONS = {
+    "stock_supervisor": {  # Front desk stock
+        "vehicles": {"view", "create", "edit"},
+        "vehicle_media": {"view", "create", "delete"},
+        "expenses": {"view", "create", "delete"},
+        "jobs": {"view"},
+        "customers": {"view", "create", "edit", "delete"},
+        "sales": {"view", "create"},
+        "team": {"view", "create", "edit", "delete"},
+    },
+    "parts_supervisor": {  # Parts department
+        "spare_parts": {"view", "create", "edit", "delete"},
+        "jobs": {"view", "create", "edit"},
+    },
+}
+
+def require(resource: str, action: str):
+    async def _checker(cu: dict = Depends(get_current_user)):
+        role = cu.get("role", "admin")
+        if role == "admin":
+            return cu
+        if action in ROLE_PERMISSIONS.get(role, {}).get(resource, set()):
+            return cu
+        raise HTTPException(403, "You do not have permission to perform this action")
+    return _checker
+
+async def admin_only(cu: dict = Depends(get_current_user)):
+    if cu.get("role", "admin") != "admin":
+        raise HTTPException(403, "This section is restricted to Super Admin accounts")
+    return cu
+
 def stock_aging(purchase_date_str: str) -> dict:
     try:
         s = str(purchase_date_str)
@@ -376,7 +410,7 @@ async def register(req: RegisterRequest, cu: dict = Depends(get_current_user)):
 
 # ── VEHICLES ──────────────────────────────────────────────────────────
 @api_router.get("/vehicles")
-async def get_vehicles(status: Optional[str] = None, brand: Optional[str] = None, cu: dict = Depends(get_current_user)):
+async def get_vehicles(status: Optional[str] = None, brand: Optional[str] = None, cu: dict = Depends(require("vehicles", "view"))):
     q = {}
     if status and status != "all":
         statuses = [s.strip() for s in status.split(",") if s.strip()]
@@ -408,7 +442,7 @@ async def get_vehicles(status: Optional[str] = None, brand: Optional[str] = None
     return [enrich_with_expenses(v, exps_by_vehicle.get(v["id"], [])) for v in vehicles]
 
 @api_router.post("/vehicles")
-async def create_vehicle(vehicle: VehicleCreate, cu: dict = Depends(get_current_user)):
+async def create_vehicle(vehicle: VehicleCreate, cu: dict = Depends(require("vehicles", "create"))):
     v = vehicle.model_dump()
     v["id"] = str(uuid.uuid4())
     v["created_at"] = datetime.now(timezone.utc).isoformat()
@@ -559,7 +593,7 @@ def _parse_vehicle_import_rows(content: bytes, filename: str, created_by: str):
 
 
 @api_router.post("/vehicles/import")
-async def import_vehicles(file: UploadFile = File(...), confirm: bool = False, cu: dict = Depends(get_current_user)):
+async def import_vehicles(file: UploadFile = File(...), confirm: bool = False, cu: dict = Depends(admin_only)):
     content = await file.read()
     docs, errors, row_results, total_data_rows = _parse_vehicle_import_rows(content, file.filename, cu["username"])
 
@@ -608,7 +642,7 @@ async def import_vehicles(file: UploadFile = File(...), confirm: bool = False, c
     }
 
 @api_router.get("/vehicles/{vid}")
-async def get_vehicle(vid: str, cu: dict = Depends(get_current_user)):
+async def get_vehicle(vid: str, cu: dict = Depends(require("vehicles", "view"))):
     v = await db.vehicles.find_one({"id": vid}, {"_id": 0})
     if not v: raise HTTPException(404, "Vehicle not found")
     v = await enrich_vehicle(v)
@@ -617,7 +651,7 @@ async def get_vehicle(vid: str, cu: dict = Depends(get_current_user)):
     return v
 
 @api_router.put("/vehicles/{vid}")
-async def update_vehicle(vid: str, vehicle: VehicleUpdate, cu: dict = Depends(get_current_user)):
+async def update_vehicle(vid: str, vehicle: VehicleUpdate, cu: dict = Depends(require("vehicles", "edit"))):
     existing = await db.vehicles.find_one({"id": vid}, {"_id": 0})
     if not existing: raise HTTPException(404, "Vehicle not found")
     upd = {k: val for k, val in vehicle.model_dump().items() if val is not None}
@@ -664,7 +698,7 @@ async def update_vehicle(vid: str, vehicle: VehicleUpdate, cu: dict = Depends(ge
     return await db.vehicles.find_one({"id": vid}, {"_id": 0})
 
 @api_router.delete("/vehicles/{vid}")
-async def delete_vehicle(vid: str, cu: dict = Depends(get_current_user)):
+async def delete_vehicle(vid: str, cu: dict = Depends(admin_only)):
     r = await db.vehicles.delete_one({"id": vid})
     if r.deleted_count == 0: raise HTTPException(404, "Vehicle not found")
     await db.expenses.delete_many({"vehicle_id": vid})
@@ -702,11 +736,11 @@ async def get_vehicle_qr(vid: str):
 
 # ── EXPENSES ──────────────────────────────────────────────────────────
 @api_router.get("/vehicles/{vid}/expenses")
-async def get_expenses(vid: str, cu: dict = Depends(get_current_user)):
+async def get_expenses(vid: str, cu: dict = Depends(require("expenses", "view"))):
     return await db.expenses.find({"vehicle_id": vid}, {"_id": 0}).to_list(200)
 
 @api_router.post("/expenses")
-async def create_expense(exp: ExpenseCreate, cu: dict = Depends(get_current_user)):
+async def create_expense(exp: ExpenseCreate, cu: dict = Depends(require("expenses", "create"))):
     e = exp.model_dump()
     e["id"] = str(uuid.uuid4())
     e["date"] = e.get("date") or datetime.now(timezone.utc).date().isoformat()
@@ -717,21 +751,21 @@ async def create_expense(exp: ExpenseCreate, cu: dict = Depends(get_current_user
     return e
 
 @api_router.delete("/expenses/{eid}")
-async def delete_expense(eid: str, cu: dict = Depends(get_current_user)):
+async def delete_expense(eid: str, cu: dict = Depends(require("expenses", "delete"))):
     r = await db.expenses.delete_one({"id": eid})
     if r.deleted_count == 0: raise HTTPException(404, "Expense not found")
     return {"message": "Deleted"}
 
 # ── JOB CARDS ─────────────────────────────────────────────────────────
 @api_router.get("/jobs")
-async def get_jobs(status: Optional[str] = None, vehicle_id: Optional[str] = None, cu: dict = Depends(get_current_user)):
+async def get_jobs(status: Optional[str] = None, vehicle_id: Optional[str] = None, cu: dict = Depends(require("jobs", "view"))):
     q = {}
     if status and status != "all": q["status"] = status
     if vehicle_id: q["vehicle_id"] = vehicle_id
     return await db.job_cards.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
 
 @api_router.post("/jobs")
-async def create_job(job: JobCardCreate, cu: dict = Depends(get_current_user)):
+async def create_job(job: JobCardCreate, cu: dict = Depends(require("jobs", "create"))):
     count = await db.job_cards.count_documents({})
     jc = job.model_dump()
     jc["id"] = str(uuid.uuid4())
@@ -765,7 +799,7 @@ async def create_job(job: JobCardCreate, cu: dict = Depends(get_current_user)):
     return jc
 
 @api_router.put("/jobs/{jid}")
-async def update_job(jid: str, job: JobCardUpdate, cu: dict = Depends(get_current_user)):
+async def update_job(jid: str, job: JobCardUpdate, cu: dict = Depends(require("jobs", "edit"))):
     upd = {k: v for k, v in job.model_dump().items() if v is not None}
     if upd.get("status") == "completed":
         upd["completed_at"] = datetime.now(timezone.utc).isoformat()
@@ -775,14 +809,14 @@ async def update_job(jid: str, job: JobCardUpdate, cu: dict = Depends(get_curren
     return await db.job_cards.find_one({"id": jid}, {"_id": 0})
 
 @api_router.delete("/jobs/{jid}")
-async def delete_job(jid: str, cu: dict = Depends(get_current_user)):
+async def delete_job(jid: str, cu: dict = Depends(admin_only)):
     r = await db.job_cards.delete_one({"id": jid})
     if r.deleted_count == 0: raise HTTPException(404, "Job not found")
     return {"message": "Deleted"}
 
 # ── CUSTOMERS ─────────────────────────────────────────────────────────
 @api_router.get("/customers")
-async def get_customers(cu: dict = Depends(get_current_user)):
+async def get_customers(cu: dict = Depends(require("customers", "view"))):
     customers = await db.customers.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     for c in customers:
         cust_sales = await db.sales.find({"customer_id": c["id"]}, {"_id": 0, "due_amount": 1, "due_date": 1}).to_list(1000)
@@ -793,7 +827,7 @@ async def get_customers(cu: dict = Depends(get_current_user)):
     return customers
 
 @api_router.post("/customers")
-async def create_customer(cust: CustomerCreate, cu: dict = Depends(get_current_user)):
+async def create_customer(cust: CustomerCreate, cu: dict = Depends(require("customers", "create"))):
     c = cust.model_dump()
     c["id"] = str(uuid.uuid4())
     c["created_at"] = datetime.now(timezone.utc).isoformat()
@@ -802,7 +836,7 @@ async def create_customer(cust: CustomerCreate, cu: dict = Depends(get_current_u
     return c
 
 @api_router.get("/customers/{cid}")
-async def get_customer(cid: str, cu: dict = Depends(get_current_user)):
+async def get_customer(cid: str, cu: dict = Depends(require("customers", "view"))):
     c = await db.customers.find_one({"id": cid}, {"_id": 0})
     if not c: raise HTTPException(404, "Not found")
     sales = await db.sales.find({"customer_id": cid}, {"_id": 0}).sort("sale_date", -1).to_list(200)
@@ -815,20 +849,20 @@ async def get_customer(cid: str, cu: dict = Depends(get_current_user)):
     return c
 
 @api_router.put("/customers/{cid}")
-async def update_customer(cid: str, cust: CustomerCreate, cu: dict = Depends(get_current_user)):
+async def update_customer(cid: str, cust: CustomerCreate, cu: dict = Depends(require("customers", "edit"))):
     r = await db.customers.update_one({"id": cid}, {"$set": cust.model_dump()})
     if r.matched_count == 0: raise HTTPException(404, "Not found")
     return await db.customers.find_one({"id": cid}, {"_id": 0})
 
 @api_router.delete("/customers/{cid}")
-async def delete_customer(cid: str, cu: dict = Depends(get_current_user)):
+async def delete_customer(cid: str, cu: dict = Depends(require("customers", "delete"))):
     r = await db.customers.delete_one({"id": cid})
     if r.deleted_count == 0: raise HTTPException(404, "Not found")
     return {"message": "Deleted"}
 
 # ── SALES ─────────────────────────────────────────────────────────────
 @api_router.get("/sales")
-async def get_sales(cu: dict = Depends(get_current_user)):
+async def get_sales(cu: dict = Depends(require("sales", "view"))):
     sales = await db.sales.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     for s in sales:
         v = await db.vehicles.find_one({"id": s.get("vehicle_id")}, {"_id": 0, "brand": 1, "model": 1, "year": 1, "registration_number": 1})
@@ -839,7 +873,7 @@ async def get_sales(cu: dict = Depends(get_current_user)):
     return sales
 
 @api_router.post("/sales")
-async def create_sale(sale: SaleCreate, cu: dict = Depends(get_current_user)):
+async def create_sale(sale: SaleCreate, cu: dict = Depends(require("sales", "create"))):
     v = await db.vehicles.find_one({"id": sale.vehicle_id}, {"_id": 0})
     if not v: raise HTTPException(404, "Vehicle not found")
     if v.get("status") != "available": raise HTTPException(400, f"Vehicle is already {v.get('status')}")
@@ -885,7 +919,7 @@ async def create_sale(sale: SaleCreate, cu: dict = Depends(get_current_user)):
     return doc
 
 @api_router.get("/sales/summary")
-async def get_sales_summary(cu: dict = Depends(get_current_user)):
+async def get_sales_summary(cu: dict = Depends(require("sales", "view"))):
     sales = await db.sales.find({}, {"_id": 0}).to_list(1000)
     total_revenue = sum(s.get("total_amount", 0) for s in sales)
     this_month = datetime.now(timezone.utc).strftime("%Y-%m")
@@ -898,7 +932,7 @@ async def get_sales_summary(cu: dict = Depends(get_current_user)):
     return {"total_sales": len(sales), "total_revenue": total_revenue, "this_month_sales": len(monthly), "this_month_revenue": sum(s.get("total_amount", 0) for s in monthly), "avg_sale_price": round(avg, 2), "total_due": total_due, "due_count": due_count, "overdue_count": overdue_count}
 
 @api_router.get("/sales/{sid}")
-async def get_sale(sid: str, cu: dict = Depends(get_current_user)):
+async def get_sale(sid: str, cu: dict = Depends(require("sales", "view"))):
     s = await db.sales.find_one({"id": sid}, {"_id": 0})
     if not s: raise HTTPException(404, "Not found")
     return s
@@ -964,7 +998,7 @@ async def delete_sale(sid: str, cu: dict = Depends(get_current_user)):
 
 # ── TEAM ──────────────────────────────────────────────────────────────
 @api_router.get("/team")
-async def get_team(cu: dict = Depends(get_current_user)):
+async def get_team(cu: dict = Depends(require("team", "view"))):
     members = await db.team_members.find({}, {"_id": 0}).to_list(100)
     for m in members:
         if m.get("role") == "mechanic":
@@ -974,7 +1008,7 @@ async def get_team(cu: dict = Depends(get_current_user)):
     return members
 
 @api_router.get("/team/leaderboard")
-async def get_leaderboard(cu: dict = Depends(get_current_user)):
+async def get_leaderboard(cu: dict = Depends(require("team", "view"))):
     sales_staff = await db.team_members.find({"role": "sales"}, {"_id": 0}).to_list(50)
     sales_board = []
     for s in sales_staff:
@@ -994,7 +1028,7 @@ async def get_leaderboard(cu: dict = Depends(get_current_user)):
     return {"sales_leaderboard": sales_board, "mechanics_leaderboard": mech_board}
 
 @api_router.post("/team")
-async def create_team_member(member: TeamMemberCreate, cu: dict = Depends(get_current_user)):
+async def create_team_member(member: TeamMemberCreate, cu: dict = Depends(require("team", "create"))):
     m = member.model_dump()
     m["id"] = str(uuid.uuid4()); m["is_active"] = True
     m["joining_date"] = m.get("joining_date") or datetime.now(timezone.utc).date().isoformat()
@@ -1004,24 +1038,24 @@ async def create_team_member(member: TeamMemberCreate, cu: dict = Depends(get_cu
     return m
 
 @api_router.put("/team/{mid}")
-async def update_team_member(mid: str, member: TeamMemberCreate, cu: dict = Depends(get_current_user)):
+async def update_team_member(mid: str, member: TeamMemberCreate, cu: dict = Depends(require("team", "edit"))):
     r = await db.team_members.update_one({"id": mid}, {"$set": member.model_dump()})
     if r.matched_count == 0: raise HTTPException(404, "Not found")
     return await db.team_members.find_one({"id": mid}, {"_id": 0})
 
 @api_router.delete("/team/{mid}")
-async def delete_team_member(mid: str, cu: dict = Depends(get_current_user)):
+async def delete_team_member(mid: str, cu: dict = Depends(require("team", "delete"))):
     r = await db.team_members.delete_one({"id": mid})
     if r.deleted_count == 0: raise HTTPException(404, "Not found")
     return {"message": "Deleted"}
 
 # ── PARTNERS ──────────────────────────────────────────────────────────
 @api_router.get("/partners")
-async def get_partners(cu: dict = Depends(get_current_user)):
+async def get_partners(cu: dict = Depends(admin_only)):
     return await db.partners.find({}, {"_id": 0}).to_list(100)
 
 @api_router.post("/partners")
-async def create_partner(partner: PartnerCreate, cu: dict = Depends(get_current_user)):
+async def create_partner(partner: PartnerCreate, cu: dict = Depends(admin_only)):
     p = partner.model_dump()
     p["id"] = str(uuid.uuid4()); p["created_at"] = datetime.now(timezone.utc).isoformat()
     await db.partners.insert_one(p)
@@ -1029,20 +1063,20 @@ async def create_partner(partner: PartnerCreate, cu: dict = Depends(get_current_
     return p
 
 @api_router.put("/partners/{pid}")
-async def update_partner(pid: str, partner: PartnerCreate, cu: dict = Depends(get_current_user)):
+async def update_partner(pid: str, partner: PartnerCreate, cu: dict = Depends(admin_only)):
     r = await db.partners.update_one({"id": pid}, {"$set": partner.model_dump()})
     if r.matched_count == 0: raise HTTPException(404, "Not found")
     return await db.partners.find_one({"id": pid}, {"_id": 0})
 
 @api_router.delete("/partners/{pid}")
-async def delete_partner(pid: str, cu: dict = Depends(get_current_user)):
+async def delete_partner(pid: str, cu: dict = Depends(admin_only)):
     r = await db.partners.delete_one({"id": pid})
     if r.deleted_count == 0: raise HTTPException(404, "Not found")
     return {"message": "Deleted"}
 
 # ── VENDORS ───────────────────────────────────────────────────────────
 @api_router.get("/vendors")
-async def get_vendors(cu: dict = Depends(get_current_user)):
+async def get_vendors(cu: dict = Depends(admin_only)):
     vendors = await db.vendors.find({}, {"_id": 0}).to_list(200)
     for v in vendors:
         vehicles = await db.vehicles.find({"vendor_id": v["id"]}, {"_id": 0}).to_list(200)
@@ -1061,7 +1095,7 @@ async def get_vendors(cu: dict = Depends(get_current_user)):
     return vendors
 
 @api_router.post("/vendors")
-async def create_vendor(vendor: VendorCreate, cu: dict = Depends(get_current_user)):
+async def create_vendor(vendor: VendorCreate, cu: dict = Depends(admin_only)):
     v = vendor.model_dump()
     v["id"] = str(uuid.uuid4()); v["created_at"] = datetime.now(timezone.utc).isoformat()
     await db.vendors.insert_one(v)
@@ -1069,19 +1103,19 @@ async def create_vendor(vendor: VendorCreate, cu: dict = Depends(get_current_use
     return v
 
 @api_router.put("/vendors/{vid}")
-async def update_vendor(vid: str, vendor: VendorCreate, cu: dict = Depends(get_current_user)):
+async def update_vendor(vid: str, vendor: VendorCreate, cu: dict = Depends(admin_only)):
     r = await db.vendors.update_one({"id": vid}, {"$set": vendor.model_dump()})
     if r.matched_count == 0: raise HTTPException(404, "Not found")
     return await db.vendors.find_one({"id": vid}, {"_id": 0})
 
 @api_router.delete("/vendors/{vid}")
-async def delete_vendor(vid: str, cu: dict = Depends(get_current_user)):
+async def delete_vendor(vid: str, cu: dict = Depends(admin_only)):
     r = await db.vendors.delete_one({"id": vid})
     if r.deleted_count == 0: raise HTTPException(404, "Not found")
     return {"message": "Deleted"}
 
 @api_router.get("/vendors/search")
-async def search_vendors(q: str = "", cu: dict = Depends(get_current_user)):
+async def search_vendors(q: str = "", cu: dict = Depends(admin_only)):
     """Fast vendor name search for autocomplete."""
     vendors = await db.vendors.find({}, {"_id": 0, "id": 1, "name": 1, "phone": 1}).to_list(200)
     if q:
@@ -1090,7 +1124,7 @@ async def search_vendors(q: str = "", cu: dict = Depends(get_current_user)):
     return vendors[:8] if q else vendors
 
 @api_router.get("/vendors/{vid}/payments")
-async def get_vendor_payments(vid: str, cu: dict = Depends(get_current_user)):
+async def get_vendor_payments(vid: str, cu: dict = Depends(admin_only)):
     payments = await db.vendor_payments.find({"vendor_id": vid}, {"_id": 0}).sort("payment_date", -1).to_list(500)
     vehicles = await db.vehicles.find({"vendor_id": vid}, {"_id": 0}).to_list(200)
     parts = await db.spare_parts.find({"vendor_id": vid}, {"_id": 0}).to_list(1000)
@@ -1110,7 +1144,7 @@ async def get_vendor_payments(vid: str, cu: dict = Depends(get_current_user)):
             "vehicles": vehicles, "parts_bills": parts_bills}
 
 @api_router.post("/vendor-payments")
-async def create_vendor_payment(payment: VendorPaymentCreate, cu: dict = Depends(get_current_user)):
+async def create_vendor_payment(payment: VendorPaymentCreate, cu: dict = Depends(admin_only)):
     p = payment.model_dump()
     p["id"] = str(uuid.uuid4())
     p["payment_date"] = p.get("payment_date") or datetime.now(timezone.utc).date().isoformat()
@@ -1121,14 +1155,14 @@ async def create_vendor_payment(payment: VendorPaymentCreate, cu: dict = Depends
     return p
 
 @api_router.delete("/vendor-payments/{pid}")
-async def delete_vendor_payment(pid: str, cu: dict = Depends(get_current_user)):
+async def delete_vendor_payment(pid: str, cu: dict = Depends(admin_only)):
     r = await db.vendor_payments.delete_one({"id": pid})
     if r.deleted_count == 0: raise HTTPException(404, "Not found")
     return {"message": "Deleted"}
 
 # ── EMI ───────────────────────────────────────────────────────────────
 @api_router.get("/emi")
-async def get_emi_list(cu: dict = Depends(get_current_user)):
+async def get_emi_list(cu: dict = Depends(admin_only)):
     emis = await db.emi_records.find({}, {"_id": 0}).to_list(500)
     for e in emis:
         payments = await db.emi_payments.find({"emi_id": e["id"]}, {"_id": 0}).to_list(200)
@@ -1140,7 +1174,7 @@ async def get_emi_list(cu: dict = Depends(get_current_user)):
     return emis
 
 @api_router.post("/emi")
-async def create_emi(emi: EMICreate, cu: dict = Depends(get_current_user)):
+async def create_emi(emi: EMICreate, cu: dict = Depends(admin_only)):
     e = emi.model_dump()
     e["id"] = str(uuid.uuid4())
     # Calculate monthly installment: EMI = P * r * (1+r)^n / ((1+r)^n - 1)
@@ -1170,7 +1204,7 @@ async def create_emi(emi: EMICreate, cu: dict = Depends(get_current_user)):
     return e
 
 @api_router.post("/emi-payments")
-async def add_emi_payment(payment: EMIPaymentCreate, cu: dict = Depends(get_current_user)):
+async def add_emi_payment(payment: EMIPaymentCreate, cu: dict = Depends(admin_only)):
     p = payment.model_dump()
     p["id"] = str(uuid.uuid4())
     p["payment_date"] = p.get("payment_date") or datetime.now(timezone.utc).date().isoformat()
@@ -1182,7 +1216,7 @@ async def add_emi_payment(payment: EMIPaymentCreate, cu: dict = Depends(get_curr
 
 # ── FINANCE ───────────────────────────────────────────────────────────
 @api_router.get("/finance/summary")
-async def finance_summary(cu: dict = Depends(get_current_user)):
+async def finance_summary(cu: dict = Depends(admin_only)):
     # Inventory value (available vehicles)
     avail = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(1000)
     inventory_value = sum(
@@ -1225,7 +1259,7 @@ async def finance_summary(cu: dict = Depends(get_current_user)):
 
 # ── REPORTS ───────────────────────────────────────────────────────────
 @api_router.get("/reports/dashboard")
-async def dashboard_stats(cu: dict = Depends(get_current_user)):
+async def dashboard_stats(cu: dict = Depends(admin_only)):
     total = await db.vehicles.count_documents({})
     available = await db.vehicles.count_documents({"status": "available"})
     reserved = await db.vehicles.count_documents({"status": "reserved"})
@@ -1262,7 +1296,7 @@ async def dashboard_stats(cu: dict = Depends(get_current_user)):
     }
 
 @api_router.get("/reports/inventory")
-async def inventory_report(cu: dict = Depends(get_current_user)):
+async def inventory_report(cu: dict = Depends(admin_only)):
     vehicles = await db.vehicles.find({}, {"_id": 0}).to_list(1000)
     report = {"by_brand": {}, "by_status": {}, "by_aging": {"fresh": 0, "normal": 0, "slow": 0, "dead": 0},
               "by_source": {}, "slow_moving": [], "dead_stock": [], "by_fuel": {}}
@@ -1288,7 +1322,7 @@ async def inventory_report(cu: dict = Depends(get_current_user)):
     return report
 
 @api_router.get("/reports/financial")
-async def financial_report(cu: dict = Depends(get_current_user)):
+async def financial_report(cu: dict = Depends(admin_only)):
     sold = await db.vehicles.find({"status": "sold"}, {"_id": 0}).to_list(1000)
     monthly = {}
     for v in sold:
@@ -1311,7 +1345,7 @@ async def financial_report(cu: dict = Depends(get_current_user)):
 
 # ── ACCOUNTING SUMMARY ────────────────────────────────────────────────
 @api_router.get("/reports/accounting-summary")
-async def accounting_summary(start_date: str, end_date: str, cu: dict = Depends(get_current_user)):
+async def accounting_summary(start_date: str, end_date: str, cu: dict = Depends(admin_only)):
     """Returns cost/sales/profit for vehicles purchased/sold within [start_date, end_date]."""
     # Vehicles purchased in period (total cost = purchase + expenses)
     purchased = await db.vehicles.find(
@@ -1347,35 +1381,35 @@ async def accounting_summary(start_date: str, end_date: str, cu: dict = Depends(
 
 # ── AUDIT LOGS ────────────────────────────────────────────────────────
 @api_router.get("/audit-logs")
-async def get_audit_logs(cu: dict = Depends(get_current_user)):
+async def get_audit_logs(cu: dict = Depends(admin_only)):
     logs = await db.audit_logs.find({}, {"_id": 0}).sort("timestamp", -1).to_list(200)
     return logs
 
 # ── LEADS (storefront Sell / Exchange / Book Service submissions) ─────
 @api_router.get("/leads")
-async def get_leads(cu: dict = Depends(get_current_user)):
+async def get_leads(cu: dict = Depends(admin_only)):
     return await db.leads.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
 
 @api_router.put("/leads/{lid}")
-async def update_lead(lid: str, lead: LeadUpdate, cu: dict = Depends(get_current_user)):
+async def update_lead(lid: str, lead: LeadUpdate, cu: dict = Depends(admin_only)):
     r = await db.leads.update_one({"id": lid}, {"$set": {"status": lead.status}})
     if r.matched_count == 0: raise HTTPException(404, "Lead not found")
     return await db.leads.find_one({"id": lid}, {"_id": 0})
 
 @api_router.delete("/leads/{lid}")
-async def delete_lead(lid: str, cu: dict = Depends(get_current_user)):
+async def delete_lead(lid: str, cu: dict = Depends(admin_only)):
     r = await db.leads.delete_one({"id": lid})
     if r.deleted_count == 0: raise HTTPException(404, "Lead not found")
     return {"message": "Deleted"}
 
 # ── SETTINGS (storefront branding/contact info) ────────────────────────
 @api_router.get("/settings")
-async def get_settings(cu: dict = Depends(get_current_user)):
+async def get_settings(cu: dict = Depends(admin_only)):
     s = await db.settings.find_one({"id": "general"}, {"_id": 0})
     return s or {}
 
 @api_router.put("/settings")
-async def update_settings(settings: SettingsUpdate, cu: dict = Depends(get_current_user)):
+async def update_settings(settings: SettingsUpdate, cu: dict = Depends(admin_only)):
     updates = {k: v for k, v in settings.model_dump().items() if v is not None}
     await db.settings.update_one({"id": "general"}, {"$set": updates}, upsert=True)
     return await db.settings.find_one({"id": "general"}, {"_id": 0})
@@ -1386,10 +1420,26 @@ async def startup():
     if not await db.users.find_one({"username": "admin"}):
         await db.users.insert_one({
             "id": str(uuid.uuid4()), "username": "admin",
-            "password_hash": hash_pw("admin123"), "name": "Admin User", "role": "admin",
+            "password_hash": hash_pw("admin123"), "name": "Super admin", "role": "admin",
             "created_at": datetime.now(timezone.utc).isoformat()
         })
         logger.info("Default admin created: admin / admin123")
+    else:
+        # Super admin: the original account, unchanged except display name.
+        await db.users.update_one({"username": "admin"}, {"$set": {"name": "Super admin"}})
+
+    ADDITIONAL_ACCOUNTS = [
+        {"username": "frontdesk", "password": "frontdesk123", "name": "Front desk stock", "role": "stock_supervisor"},
+        {"username": "parts", "password": "parts123", "name": "Parts department", "role": "parts_supervisor"},
+    ]
+    for acct in ADDITIONAL_ACCOUNTS:
+        if not await db.users.find_one({"username": acct["username"]}):
+            await db.users.insert_one({
+                "id": str(uuid.uuid4()), "username": acct["username"],
+                "password_hash": hash_pw(acct["password"]), "name": acct["name"], "role": acct["role"],
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+            logger.info(f"Default account created: {acct['username']} / {acct['password']}")
     if await db.partners.count_documents({}) == 0:
         now = datetime.now(timezone.utc).isoformat()
         await db.partners.insert_many([
@@ -1445,14 +1495,14 @@ def _photo_out(p: dict) -> dict:
             "size": p["size"], "url": f"data:{p['content_type']};base64,{p['data']}"}
 
 @api_router.get("/vehicles/{vid}/photos")
-async def get_vehicle_photos(vid: str, cu: dict = Depends(get_current_user)):
+async def get_vehicle_photos(vid: str, cu: dict = Depends(require("vehicle_media", "view"))):
     v = await db.vehicles.find_one({"id": vid}, {"_id": 0, "id": 1})
     if not v: raise HTTPException(404, "Vehicle not found")
     photos = await db.vehicle_photos.find({"vehicle_id": vid}, {"_id": 0}).sort("uploaded_at", 1).to_list(200)
     return [_photo_out(p) for p in photos]
 
 @api_router.post("/vehicles/{vid}/photos")
-async def upload_vehicle_photo(vid: str, file: UploadFile = File(...), cu: dict = Depends(get_current_user)):
+async def upload_vehicle_photo(vid: str, file: UploadFile = File(...), cu: dict = Depends(require("vehicle_media", "create"))):
     v = await db.vehicles.find_one({"id": vid})
     if not v: raise HTTPException(404, "Vehicle not found")
     if file.content_type not in ALLOWED_IMAGE_TYPES:
@@ -1475,7 +1525,7 @@ async def upload_vehicle_photo(vid: str, file: UploadFile = File(...), cu: dict 
     return _photo_out(photo)
 
 @api_router.delete("/vehicles/{vid}/photos/{photo_id}")
-async def delete_vehicle_photo(vid: str, photo_id: str, cu: dict = Depends(get_current_user)):
+async def delete_vehicle_photo(vid: str, photo_id: str, cu: dict = Depends(require("vehicle_media", "delete"))):
     r = await db.vehicle_photos.delete_one({"id": photo_id, "vehicle_id": vid})
     if r.deleted_count == 0: raise HTTPException(404, "Photo not found")
     return {"message": "Photo deleted"}
@@ -1493,14 +1543,14 @@ def _doc_out(d: dict) -> dict:
             "url": f"data:{d['content_type']};base64,{d['data']}"}
 
 @api_router.get("/vehicles/{vid}/legal-documents")
-async def get_legal_documents(vid: str, cu: dict = Depends(get_current_user)):
+async def get_legal_documents(vid: str, cu: dict = Depends(require("vehicle_media", "view"))):
     v = await db.vehicles.find_one({"id": vid}, {"_id": 0, "id": 1})
     if not v: raise HTTPException(404, "Vehicle not found")
     docs = await db.legal_documents.find({"vehicle_id": vid}, {"_id": 0}).sort("uploaded_at", 1).to_list(200)
     return [_doc_out(d) for d in docs]
 
 @api_router.post("/vehicles/{vid}/legal-documents")
-async def upload_legal_document(vid: str, file: UploadFile = File(...), doc_type: str = Form("other"), cu: dict = Depends(get_current_user)):
+async def upload_legal_document(vid: str, file: UploadFile = File(...), doc_type: str = Form("other"), cu: dict = Depends(require("vehicle_media", "create"))):
     v = await db.vehicles.find_one({"id": vid})
     if not v: raise HTTPException(404, "Vehicle not found")
     if file.content_type not in ALLOWED_DOC_TYPES:
@@ -1522,7 +1572,7 @@ async def upload_legal_document(vid: str, file: UploadFile = File(...), doc_type
     return _doc_out(doc)
 
 @api_router.delete("/vehicles/{vid}/legal-documents/{doc_id}")
-async def delete_legal_document(vid: str, doc_id: str, cu: dict = Depends(get_current_user)):
+async def delete_legal_document(vid: str, doc_id: str, cu: dict = Depends(require("vehicle_media", "delete"))):
     r = await db.legal_documents.delete_one({"id": doc_id, "vehicle_id": vid})
     if r.deleted_count == 0: raise HTTPException(404, "Document not found")
     return {"message": "Document deleted"}
@@ -1563,7 +1613,7 @@ class SparePartUpdate(BaseModel):
     notes: Optional[str] = None
 
 @api_router.get("/spare-parts")
-async def get_spare_parts(category: Optional[str] = None, low_stock: Optional[bool] = None, cu: dict = Depends(get_current_user)):
+async def get_spare_parts(category: Optional[str] = None, low_stock: Optional[bool] = None, cu: dict = Depends(require("spare_parts", "view"))):
     query = {}
     if category: query["category"] = category
     parts = await db.spare_parts.find(query, {"_id": 0}).to_list(1000)
@@ -1582,7 +1632,7 @@ async def get_spare_parts(category: Optional[str] = None, low_stock: Optional[bo
     return parts
 
 @api_router.post("/spare-parts")
-async def create_spare_part(part: SparePartCreate, cu: dict = Depends(get_current_user)):
+async def create_spare_part(part: SparePartCreate, cu: dict = Depends(require("spare_parts", "create"))):
     doc = {"id": str(uuid.uuid4()), **part.dict(), "created_at": datetime.now(timezone.utc).isoformat()}
     if not doc.get("entry_date"): doc["entry_date"] = datetime.now(timezone.utc).date().isoformat()
     await db.spare_parts.insert_one(doc)
@@ -1590,7 +1640,7 @@ async def create_spare_part(part: SparePartCreate, cu: dict = Depends(get_curren
     return doc
 
 @api_router.put("/spare-parts/{pid}")
-async def update_spare_part(pid: str, part: SparePartUpdate, cu: dict = Depends(get_current_user)):
+async def update_spare_part(pid: str, part: SparePartUpdate, cu: dict = Depends(require("spare_parts", "edit"))):
     upd = {k: v for k, v in part.dict().items() if v is not None}
     if not upd: raise HTTPException(400, "No fields to update")
     upd["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -1600,13 +1650,13 @@ async def update_spare_part(pid: str, part: SparePartUpdate, cu: dict = Depends(
     return doc
 
 @api_router.delete("/spare-parts/{pid}")
-async def delete_spare_part(pid: str, cu: dict = Depends(get_current_user)):
+async def delete_spare_part(pid: str, cu: dict = Depends(require("spare_parts", "delete"))):
     r = await db.spare_parts.delete_one({"id": pid})
     if r.deleted_count == 0: raise HTTPException(404, "Not found")
     return {"message": "Deleted"}
 
 @api_router.post("/spare-parts/{pid}/adjust-stock")
-async def adjust_spare_stock(pid: str, req: dict, cu: dict = Depends(get_current_user)):
+async def adjust_spare_stock(pid: str, req: dict, cu: dict = Depends(require("spare_parts", "edit"))):
     delta = req.get("delta", 0)
     p = await db.spare_parts.find_one({"id": pid}, {"_id": 0, "quantity": 1})
     if not p: raise HTTPException(404, "Not found")
@@ -1615,7 +1665,7 @@ async def adjust_spare_stock(pid: str, req: dict, cu: dict = Depends(get_current
     return {"quantity": new_qty}
 
 @api_router.post("/spare-parts/{pid}/stock-out")
-async def stock_out_part(pid: str, req: PartStockOut, cu: dict = Depends(get_current_user)):
+async def stock_out_part(pid: str, req: PartStockOut, cu: dict = Depends(require("spare_parts", "edit"))):
     p = await db.spare_parts.find_one({"id": pid}, {"_id": 0})
     if not p: raise HTTPException(404, "Not found")
     if req.quantity <= 0: raise HTTPException(400, "Quantity must be positive")
@@ -1635,7 +1685,7 @@ async def stock_out_part(pid: str, req: PartStockOut, cu: dict = Depends(get_cur
     return {"quantity": new_qty, "transaction": txn}
 
 @api_router.get("/spare-parts/summary")
-async def spare_parts_summary(cu: dict = Depends(get_current_user)):
+async def spare_parts_summary(cu: dict = Depends(require("spare_parts", "view"))):
     parts = await db.spare_parts.find({}, {"_id": 0}).to_list(1000)
     total_value = sum(p.get("quantity", 0) * p.get("unit_cost", 0) for p in parts)
     low_stock = [p for p in parts if p.get("quantity", 0) <= p.get("min_stock_alert", 2)]
@@ -1643,7 +1693,7 @@ async def spare_parts_summary(cu: dict = Depends(get_current_user)):
     return {"total_parts": len(parts), "total_value": total_value, "low_stock_count": len(low_stock), "categories": categories}
 
 @api_router.get("/spare-parts/{pid}/transactions")
-async def get_part_transactions(pid: str, cu: dict = Depends(get_current_user)):
+async def get_part_transactions(pid: str, cu: dict = Depends(require("spare_parts", "view"))):
     txns = await db.part_transactions.find({"part_id": pid}, {"_id": 0}).sort("created_at", -1).to_list(100)
     return txns
 
@@ -1651,7 +1701,7 @@ async def get_part_transactions(pid: str, cu: dict = Depends(get_current_user)):
 # ── WEBSITE SYNC (hamroauto.com.np) ───────────────────────────────────
 # ══════════════════════════════════════════════════════════════════════
 @api_router.get("/sync/export")
-async def export_for_website(cu: dict = Depends(get_current_user)):
+async def export_for_website(cu: dict = Depends(admin_only)):
     """Export available inventory in hamroauto.com.np listing format."""
     vehicles = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(200)
     listings = []
@@ -1677,7 +1727,7 @@ async def export_for_website(cu: dict = Depends(get_current_user)):
     return {"count": len(listings), "listings": listings, "exported_at": datetime.now(timezone.utc).isoformat()}
 
 @api_router.post("/sync/push")
-async def push_to_website(cu: dict = Depends(get_current_user)):
+async def push_to_website(cu: dict = Depends(admin_only)):
     """Simulate push to hamroauto.com.np — in production connect to their API."""
     vehicles = await db.vehicles.find({"status": "available"}, {"_id": 0}).to_list(200)
     sync_log = {"pushed_at": datetime.now(timezone.utc).isoformat(), "count": len(vehicles),

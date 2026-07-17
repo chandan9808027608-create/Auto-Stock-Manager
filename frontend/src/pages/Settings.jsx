@@ -15,14 +15,16 @@ const SITE_FIELDS = [
 
 export default function Settings() {
   const { user, logout } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [pwForm, setPwForm] = useState({ current_password: "", new_password: "", confirm: "" });
   const [saving, setSaving] = useState(false);
   const [siteForm, setSiteForm] = useState(null);
   const [savingSite, setSavingSite] = useState(false);
 
   useEffect(() => {
+    if (!isAdmin) return;
     api.get("/settings").then(r => setSiteForm(r.data || {})).catch(() => toast.error("Failed to load storefront settings"));
-  }, []);
+  }, [isAdmin]);
 
   const saveSiteSettings = async (e) => {
     e.preventDefault();
@@ -72,32 +74,34 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Storefront Settings */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-        <h2 className="text-base font-bold text-slate-900 mb-1" style={{ fontFamily: "Manrope" }}>Storefront Settings</h2>
-        <p className="text-xs text-slate-500 mb-4">Branding and contact info shown on the public website (hamroauto.com.np)</p>
-        {!siteForm ? (
-          <div className="flex items-center justify-center h-24"><div className="animate-spin w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full" /></div>
-        ) : (
-          <form onSubmit={saveSiteSettings} className="space-y-4">
-            {SITE_FIELDS.map(([label, key, type]) => (
-              <div key={key}>
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">{label}</label>
-                <input
-                  type={type}
-                  value={siteForm[key] || ""}
-                  onChange={e => setSiteForm({ ...siteForm, [key]: e.target.value })}
-                  className={inp}
-                  data-testid={`site-${key}`}
-                />
-              </div>
-            ))}
-            <button type="submit" disabled={savingSite} data-testid="save-site-settings-btn" className="h-10 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 transition-all active:scale-95">
-              {savingSite ? "Saving..." : "Save Storefront Settings"}
-            </button>
-          </form>
-        )}
-      </div>
+      {/* Storefront Settings (Super admin only) */}
+      {isAdmin && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+          <h2 className="text-base font-bold text-slate-900 mb-1" style={{ fontFamily: "Manrope" }}>Storefront Settings</h2>
+          <p className="text-xs text-slate-500 mb-4">Branding and contact info shown on the public website (hamroauto.com.np)</p>
+          {!siteForm ? (
+            <div className="flex items-center justify-center h-24"><div className="animate-spin w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full" /></div>
+          ) : (
+            <form onSubmit={saveSiteSettings} className="space-y-4">
+              {SITE_FIELDS.map(([label, key, type]) => (
+                <div key={key}>
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">{label}</label>
+                  <input
+                    type={type}
+                    value={siteForm[key] || ""}
+                    onChange={e => setSiteForm({ ...siteForm, [key]: e.target.value })}
+                    className={inp}
+                    data-testid={`site-${key}`}
+                  />
+                </div>
+              ))}
+              <button type="submit" disabled={savingSite} data-testid="save-site-settings-btn" className="h-10 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 transition-all active:scale-95">
+                {savingSite ? "Saving..." : "Save Storefront Settings"}
+              </button>
+            </form>
+          )}
+        </div>
+      )}
 
       {/* Change Password */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
@@ -141,12 +145,18 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Default Credentials */}
-      <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
-        <h3 className="text-sm font-bold text-amber-900 mb-2">Default Login Credentials</h3>
-        <p className="text-xs text-amber-700">Username: <span className="font-mono font-bold">admin</span> &nbsp;|&nbsp; Password: <span className="font-mono font-bold">admin123</span></p>
-        <p className="text-xs text-amber-600 mt-1">Please change the default password for security.</p>
-      </div>
+      {/* Default Credentials (Super admin only) */}
+      {isAdmin && (
+        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+          <h3 className="text-sm font-bold text-amber-900 mb-2">Default Login Credentials</h3>
+          <div className="text-xs text-amber-700 space-y-0.5">
+            <p>Super admin — Username: <span className="font-mono font-bold">admin</span> | Password: <span className="font-mono font-bold">admin123</span></p>
+            <p>Front desk stock — Username: <span className="font-mono font-bold">frontdesk</span> | Password: <span className="font-mono font-bold">frontdesk123</span></p>
+            <p>Parts department — Username: <span className="font-mono font-bold">parts</span> | Password: <span className="font-mono font-bold">parts123</span></p>
+          </div>
+          <p className="text-xs text-amber-600 mt-1.5">Please change these default passwords for security.</p>
+        </div>
+      )}
     </div>
   );
 }
