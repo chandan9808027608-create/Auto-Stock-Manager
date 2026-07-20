@@ -54,7 +54,7 @@ export default function Settings() {
     e.preventDefault();
     if (!pwForm.current_password || !pwForm.new_password) { toast.error("Fill all fields"); return; }
     if (pwForm.new_password !== pwForm.confirm) { toast.error("Passwords don't match"); return; }
-    if (pwForm.new_password.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    if (pwForm.new_password.length < 8) { toast.error("Password must be at least 8 characters"); return; }
     setSaving(true);
     try {
       await api.post("/auth/change-password", { current_password: pwForm.current_password, new_password: pwForm.new_password });
@@ -131,7 +131,9 @@ export default function Settings() {
                 className={inp}
                 data-testid={`pw-${key}`}
                 placeholder="••••••••"
+                minLength={key === "new_password" ? 8 : undefined}
               />
+              {key === "new_password" && <p className="text-xs text-slate-400 mt-1">At least 8 characters</p>}
             </div>
           ))}
           <button type="submit" disabled={saving} data-testid="change-pw-btn" className="h-10 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 transition-all active:scale-95">

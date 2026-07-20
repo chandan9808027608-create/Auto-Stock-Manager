@@ -8,8 +8,8 @@ from passlib.context import CryptContext
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-import os, logging, jwt, uuid, json, base64, io
-from pydantic import BaseModel
+import os, logging, jwt, uuid, json, base64, io, asyncio
+from pydantic import BaseModel, Field
 from PIL import Image, ImageOps
 from google import genai
 from google.genai import types as genai_types
@@ -44,7 +44,7 @@ ai_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 app = FastAPI(title="Hamro G&G Auto OS", version="1.0.0")
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=10)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -55,6 +55,11 @@ async def health(): return {"status": "ok", "service": "Hamro G&G Auto OS"}
 # ── Auth Helpers ──────────────────────────────────────────────────────
 def hash_pw(pw: str) -> str: return pwd_context.hash(pw)
 def verify_pw(pw: str, hashed: str) -> bool: return pwd_context.verify(pw, hashed)
+
+# bcrypt is CPU-bound and blocks the event loop; run it in a worker thread so one
+# slow login doesn't stall every other concurrent request on this single-worker server.
+async def hash_pw_async(pw: str) -> str: return await asyncio.to_thread(hash_pw, pw)
+async def verify_pw_async(pw: str, hashed: str) -> bool: return await asyncio.to_thread(verify_pw, pw, hashed)
 
 def create_token(user_id: str, username: str, role: str = "admin") -> str:
     return jwt.encode(
@@ -337,11 +342,11 @@ class LoginRequest(BaseModel):
     username: str; password: str
 
 class RegisterRequest(BaseModel):
-    username: str; password: str; name: str
+    username: str; password: str = Field(min_length=8); name: str
     role: str = "sales_staff"
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str; new_password: str
+    current_password: str; new_password: str = Field(min_length=8)
 
 class VehicleCreate(BaseModel):
     brand: str; model: str
@@ -515,7 +520,7 @@ class SettingsUpdate(BaseModel):
 @api_router.post("/auth/login")
 async def login(req: LoginRequest):
     user = await db.users.find_one({"username": req.username})
-    if not user or not verify_pw(req.password, user["password_hash"]):
+    if not user or not await verify_pw_async(req.password, user["password_hash"]):
         raise HTTPException(401, "Invalid credentials")
     token = create_token(user.get("id", ""), user["username"], user.get("role", "admin"))
     return {"token": token, "username": user["username"], "name": user.get("name", user["username"]), "role": user.get("role", "admin")}
@@ -528,9 +533,9 @@ async def me(cu: dict = Depends(get_current_user)):
 @api_router.post("/auth/change-password")
 async def change_password(req: ChangePasswordRequest, cu: dict = Depends(get_current_user)):
     user = await db.users.find_one({"username": cu["username"]})
-    if not user or not verify_pw(req.current_password, user["password_hash"]):
+    if not user or not await verify_pw_async(req.current_password, user["password_hash"]):
         raise HTTPException(400, "Current password incorrect")
-    await db.users.update_one({"username": cu["username"]}, {"$set": {"password_hash": hash_pw(req.new_password)}})
+    await db.users.update_one({"username": cu["username"]}, {"$set": {"password_hash": await hash_pw_async(req.new_password)}})
     return {"message": "Password changed successfully"}
 
 @api_router.get("/auth/users")
@@ -546,7 +551,7 @@ async def register(req: RegisterRequest, cu: dict = Depends(get_current_user)):
     if existing:
         raise HTTPException(400, "Username already exists")
     user = {"id": str(uuid.uuid4()), "username": req.username,
-            "password_hash": hash_pw(req.password), "name": req.name, "role": req.role,
+            "password_hash": await hash_pw_async(req.password), "name": req.name, "role": req.role,
             "created_at": datetime.now(timezone.utc).isoformat()}
     await db.users.insert_one(user)
     user.pop("_id", None); user.pop("password_hash", None)
