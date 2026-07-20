@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { Plus, Wrench, TrendingUp, Users, Trash2, Edit } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
+import { formatBSDate } from "../utils/nepali-date";
+import BSDatePicker from "../components/BSDatePicker";
 
 export default function Team() {
   const [members, setMembers] = useState([]);
@@ -69,7 +71,7 @@ export default function Team() {
         {member.contact && <div className="flex items-center gap-2"><span className="text-slate-400 text-xs">Phone:</span>{member.contact}</div>}
         {member.specialization && <div className="flex items-center gap-2"><span className="text-slate-400 text-xs">Specialization:</span>{member.specialization}</div>}
         {member.commission_rate && <div className="flex items-center gap-2"><span className="text-slate-400 text-xs">Commission:</span>{member.commission_rate}%</div>}
-        <div className="flex items-center gap-2"><span className="text-slate-400 text-xs">Joined:</span>{member.joining_date?.slice(0, 10)}</div>
+        <div className="flex items-center gap-2"><span className="text-slate-400 text-xs">Joined:</span>{member.joining_date ? `${formatBSDate(member.joining_date)} BS` : "—"}</div>
       </div>
 
       {member.role === "mechanic" && (
@@ -181,8 +183,8 @@ export default function Team() {
                 </div>
               )}
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Joining Date</label>
-                <input type="date" value={form.joining_date} onChange={e => setForm({...form, joining_date: e.target.value})} className={inp} />
+                <label className="block text-xs font-medium text-slate-600 mb-1">Joining Date (BS)</label>
+                <BSDatePicker value={form.joining_date} onChange={val => setForm({...form, joining_date: val})} />
               </div>
               <div className="flex gap-3">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 h-10 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
