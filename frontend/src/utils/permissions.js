@@ -2,7 +2,7 @@
 // always has full access; other roles only see what's listed here.
 export const ROLE_NAV_PATHS = {
   stock_supervisor: ["/inventory", "/sales", "/jobs", "/customers", "/team", "/settings"],
-  parts_supervisor: ["/spare-parts", "/jobs", "/settings"],
+  parts_supervisor: ["/spare-parts", "/jobs", "/team", "/settings"],
 };
 
 export const ROLE_DEFAULT_PATH = {

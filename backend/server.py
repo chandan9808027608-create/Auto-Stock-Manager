@@ -90,6 +90,7 @@ ROLE_PERMISSIONS = {
         "jobs": {"view", "create", "edit"},
         "vehicles": {"view"},  # read-only, needed to pick a vehicle when creating a job card
         "vendor_lookup": {"view", "create"},  # supplier picker + inline "add new vendor" on a part
+        "team": {"view", "create", "edit", "delete"},
     },
 }
 
