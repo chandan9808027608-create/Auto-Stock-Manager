@@ -10,7 +10,7 @@ import { useAuth } from "../context/AuthContext";
 import { canEditJobs, canDeleteJobs } from "../utils/permissions";
 
 const STATUSES = ["all", "pending", "in_progress", "completed"];
-const EMPTY_FORM = { vehicle_id: "", work_description: "", mechanic_name: "", estimated_cost: "", notes: "", coupon_no: "", job_date: "" };
+const EMPTY_FORM = { vehicle_id: "", work_description: "", mechanic_id: "", mechanic_name: "", estimated_cost: "", notes: "", coupon_no: "", job_date: "" };
 
 export default function JobCards() {
   const { user } = useAuth();
@@ -25,6 +25,7 @@ export default function JobCards() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [vehicles, setVehicles] = useState([]);
   const [spareParts, setSpareParts] = useState([]);
+  const [mechanics, setMechanics] = useState([]);
   const [saving, setSaving] = useState(false);
   const [updating, setUpdating] = useState(null);
 
@@ -44,6 +45,7 @@ export default function JobCards() {
     fetchJobs();
     api.get("/vehicles?status=in_repair").then(r => setVehicles(r.data)).catch(() => {});
     api.get("/spare-parts").then(r => setSpareParts(r.data)).catch(() => {});
+    api.get("/team").then(r => setMechanics(r.data.filter(m => m.role === "mechanic"))).catch(() => {});
   }, [fetchJobs]);
 
   useEffect(() => {
@@ -126,6 +128,7 @@ export default function JobCards() {
   };
 
   const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const sel = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
 
   const stats = {
     pending: jobs.filter(j => j.status === "pending").length,
@@ -288,7 +291,20 @@ export default function JobCards() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Mechanic Name <span className="text-red-500">*</span></label>
-                <input value={form.mechanic_name} onChange={e => setForm({...form, mechanic_name: e.target.value})} placeholder="Mechanic name" className={inp} />
+                <select
+                  value={form.mechanic_id}
+                  onChange={e => {
+                    const m = mechanics.find(x => x.id === e.target.value);
+                    setForm({...form, mechanic_id: e.target.value, mechanic_name: m ? m.name : ""});
+                  }}
+                  className={sel}
+                  data-testid="job-mechanic-select"
+                >
+                  <option value="">Select a mechanic...</option>
+                  {mechanics.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Estimated Cost (NPR) <span className="text-red-500">*</span></label>
