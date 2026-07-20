@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Calendar, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { adToBsDate, bsToAdDate, getBSMonthMaxDays, getCurrentBSDate, BS_MONTHS, formatBSDate } from "../utils/nepali-date";
 
@@ -18,17 +19,26 @@ function firstWeekdayOfBSMonth(year, month) {
   return new Date(`${adStr}T00:00:00`).getDay();
 }
 
+const POPOVER_WIDTH = 288; // matches w-72
+const VIEWPORT_MARGIN = 8;
+
 /**
  * BSDatePicker — Nepali (Bikram Sambat) calendar picker.
  * The user only ever picks a BS date; value/onChange stay plain AD "YYYY-MM-DD"
  * strings (via @sbmdkl/nepali-date-converter under nepali-date.js), so the rest
  * of the form, the API payload, and the database are unaffected.
+ * The calendar popover is rendered via a portal into document.body and
+ * positioned in fixed viewport coordinates so it always stays fully visible —
+ * flipping above the trigger and clamping horizontally — instead of being
+ * clipped by a modal's overflow or the edge of the browser window.
  */
 export default function BSDatePicker({ value, onChange, required, className = "" }) {
   const [open, setOpen] = useState(false);
   const [viewYear, setViewYear] = useState(null);
   const [viewMonth, setViewMonth] = useState(null);
-  const wrapRef = useRef(null);
+  const [coords, setCoords] = useState(null); // { top, left, placement } in viewport (fixed) coordinates
+  const triggerRef = useRef(null);
+  const popoverRef = useRef(null);
 
   const selectedBS = adToBsDate(value);
 
@@ -42,10 +52,56 @@ export default function BSDatePicker({ value, onChange, required, className = ""
 
   useEffect(() => {
     if (!open) return;
-    const onClickOutside = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    const onClickOutside = (e) => {
+      if (triggerRef.current?.contains(e.target)) return;
+      if (popoverRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [open]);
+
+  // Positions the popover in viewport ("fixed") coordinates, flipping above the
+  // trigger and clamping horizontally so it always stays fully on-screen instead
+  // of being clipped by a modal's overflow or the bottom of the browser window.
+  const positionPopover = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const popoverHeight = popoverRef.current?.offsetHeight ?? 340;
+
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const placement = spaceBelow < popoverHeight + VIEWPORT_MARGIN && rect.top > popoverHeight + VIEWPORT_MARGIN
+      ? "top"
+      : "bottom";
+
+    const top = placement === "top"
+      ? Math.max(VIEWPORT_MARGIN, rect.top - popoverHeight - 6)
+      : Math.min(rect.bottom + 6, window.innerHeight - VIEWPORT_MARGIN);
+
+    const left = Math.min(
+      Math.max(VIEWPORT_MARGIN, rect.left),
+      window.innerWidth - POPOVER_WIDTH - VIEWPORT_MARGIN
+    );
+
+    setCoords({ top, left, placement });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open || !viewYear || !viewMonth) return;
+    positionPopover();
+  }, [open, viewYear, viewMonth, positionPopover]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onReposition = () => positionPopover();
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [open, positionPopover]);
 
   const maxDays = viewYear && viewMonth ? getBSMonthMaxDays(viewYear, viewMonth) : 30;
   const leadingBlanks = viewYear && viewMonth ? firstWeekdayOfBSMonth(viewYear, viewMonth) : 0;
@@ -65,31 +121,14 @@ export default function BSDatePicker({ value, onChange, required, className = ""
     setOpen(false);
   };
 
-  return (
-    <div className={`relative ${className}`} ref={wrapRef} data-testid="bs-date-picker">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="w-full h-10 sm:h-9 px-3 text-sm border border-slate-200 rounded-lg bg-white flex items-center justify-between gap-2 hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        data-testid="bs-date-trigger"
+  const popover = open && viewYear && coords && createPortal(
+    (
+      <div
+        ref={popoverRef}
+        className="fixed z-50 w-72 bg-white border border-slate-200 rounded-xl shadow-2xl p-3"
+        style={{ top: coords.top, left: coords.left }}
+        data-testid="bs-calendar-popover"
       >
-        <span className={selectedBS ? "text-slate-800" : "text-slate-400"}>
-          {selectedBS ? `${formatBSDate(value)} BS` : "Select date (BS)"}
-        </span>
-        <Calendar size={15} className="text-slate-400 shrink-0" />
-      </button>
-
-      <div className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-500" data-testid="bs-date-ad-readout">
-        <span>Equivalent AD:</span>
-        <span className="font-mono font-medium text-slate-700">{value || "—"}</span>
-        {value && <Check size={13} className="text-green-600" />}
-      </div>
-
-      {open && viewYear && (
-        <div
-          className="absolute z-20 mt-1 w-72 max-w-[92vw] left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 bg-white border border-slate-200 rounded-xl shadow-lg p-3"
-          data-testid="bs-calendar-popover"
-        >
           <div className="flex items-center justify-between mb-2 gap-2">
             <button type="button" onClick={() => changeMonth(-1)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500" data-testid="bs-prev-month">
               <ChevronLeft size={16} />
@@ -132,7 +171,32 @@ export default function BSDatePicker({ value, onChange, required, className = ""
             })}
           </div>
         </div>
-      )}
+    ),
+    document.body
+  );
+
+  return (
+    <div className={`relative ${className}`} data-testid="bs-date-picker">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full h-10 sm:h-9 px-3 text-sm border border-slate-200 rounded-lg bg-white flex items-center justify-between gap-2 hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        data-testid="bs-date-trigger"
+      >
+        <span className={selectedBS ? "text-slate-800" : "text-slate-400"}>
+          {selectedBS ? `${formatBSDate(value)} BS` : "Select date (BS)"}
+        </span>
+        <Calendar size={15} className="text-slate-400 shrink-0" />
+      </button>
+
+      <div className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-500" data-testid="bs-date-ad-readout">
+        <span>Equivalent AD:</span>
+        <span className="font-mono font-medium text-slate-700">{value || "—"}</span>
+        {value && <Check size={13} className="text-green-600" />}
+      </div>
+
+      {popover}
     </div>
   );
 }
