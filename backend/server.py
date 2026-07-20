@@ -88,6 +88,7 @@ ROLE_PERMISSIONS = {
     "parts_supervisor": {  # Parts department
         "spare_parts": {"view", "create", "edit", "delete"},
         "jobs": {"view", "create", "edit"},
+        "vehicles": {"view"},  # read-only, needed to pick a vehicle when creating a job card
         "vendor_lookup": {"view", "create"},  # supplier picker + inline "add new vendor" on a part
     },
 }
@@ -949,9 +950,10 @@ async def create_job(job: JobCardCreate, cu: dict = Depends(require("jobs", "cre
     jc["created_at"] = datetime.now(timezone.utc).isoformat()
     jc["completed_at"] = None; jc["created_by"] = cu["username"]
     v = await db.vehicles.find_one({"id": job.vehicle_id}, {"_id": 0})
-    if v:
-        jc["vehicle_brand"] = v.get("brand"); jc["vehicle_model"] = v.get("model")
-        jc["vehicle_year"] = v.get("year"); jc["registration_number"] = v.get("registration_number")
+    if not v: raise HTTPException(404, "Vehicle not found")
+    if v.get("status") != "in_repair": raise HTTPException(400, "Job cards can only be created for vehicles in the Repair stage")
+    jc["vehicle_brand"] = v.get("brand"); jc["vehicle_model"] = v.get("model")
+    jc["vehicle_year"] = v.get("year"); jc["registration_number"] = v.get("registration_number")
     await db.job_cards.insert_one(jc)
     jc.pop("_id", None)
     # Deduct parts from spare parts inventory and log transactions

@@ -40,7 +40,7 @@ export default function JobCards() {
 
   useEffect(() => {
     fetchJobs();
-    api.get("/vehicles?status=available,in_repair").then(r => setVehicles(r.data)).catch(() => {});
+    api.get("/vehicles?status=in_repair").then(r => setVehicles(r.data)).catch(() => {});
     api.get("/spare-parts").then(r => setSpareParts(r.data)).catch(() => {});
   }, [fetchJobs]);
 
