@@ -110,12 +110,12 @@ class TestJobCardPartsDeduction:
         assert part is not None
         qty_before = part["quantity"]
 
-        # Get a vehicle
-        rv = auth.get(f"{BASE_URL}/api/vehicles?status=available")
+        # Get a vehicle in the Repair stage (job cards can only be created for these)
+        rv = auth.get(f"{BASE_URL}/api/vehicles?status=in_repair")
         assert rv.status_code == 200
         vehicles = rv.json()
         if not vehicles:
-            pytest.skip("No available vehicles for job card test")
+            pytest.skip("No in_repair vehicles for job card test")
         vehicle_id = vehicles[0]["id"]
 
         # Create job card with 1 part
@@ -124,6 +124,8 @@ class TestJobCardPartsDeduction:
             "work_description": "TEST_job_card_parts_deduction",
             "mechanic_name": "TEST_Mechanic",
             "estimated_cost": 500,
+            "coupon_no": 1,
+            "job_date": "2026-07-20",
             "parts": [{"part_id": pid, "part_name": name, "quantity": 1, "unit_cost": 100}]
         })
         assert r.status_code == 200, f"Job creation failed: {r.text}"

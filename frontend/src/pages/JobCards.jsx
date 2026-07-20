@@ -3,12 +3,14 @@ import { Plus, Search, Wrench, X, Package } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getJobStyle } from "../utils/helpers";
+import { formatBSDate } from "../utils/nepali-date";
 import VehicleComboBox from "../components/VehicleComboBox";
+import BSDatePicker from "../components/BSDatePicker";
 import { useAuth } from "../context/AuthContext";
 import { canEditJobs, canDeleteJobs } from "../utils/permissions";
 
 const STATUSES = ["all", "pending", "in_progress", "completed"];
-const EMPTY_FORM = { vehicle_id: "", work_description: "", mechanic_name: "", estimated_cost: "", notes: "" };
+const EMPTY_FORM = { vehicle_id: "", work_description: "", mechanic_name: "", estimated_cost: "", notes: "", coupon_no: "", job_date: "" };
 
 export default function JobCards() {
   const { user } = useAuth();
@@ -83,16 +85,19 @@ export default function JobCards() {
 
   const removePartFromJob = (part_id) => setJobParts(prev => prev.filter(p => p.part_id !== part_id));
 
-  const openModal = () => { setForm(EMPTY_FORM); setJobParts([]); setPartSearch(""); setShowModal(true); };
+  const nextCouponNo = () => Math.max(0, ...jobs.map(j => Number(j.coupon_no) || 0)) + 1;
+
+  const openModal = () => { setForm({ ...EMPTY_FORM, coupon_no: String(nextCouponNo()) }); setJobParts([]); setPartSearch(""); setShowModal(true); };
 
   const createJob = async (e) => {
     e.preventDefault();
-    if (!form.vehicle_id || !form.work_description || !form.mechanic_name || !form.estimated_cost) { toast.error("Fill all required fields"); return; }
+    if (!form.vehicle_id || !form.work_description || !form.mechanic_name || !form.estimated_cost || !form.coupon_no || !form.job_date) { toast.error("Fill all required fields"); return; }
     setSaving(true);
     try {
       await api.post("/jobs", {
         ...form,
         estimated_cost: Number(form.estimated_cost),
+        coupon_no: Number(form.coupon_no),
         parts: jobParts.map(p => ({ part_id: p.part_id, part_name: p.part_name, quantity: p.quantity, unit_cost: p.unit_cost })),
       });
       toast.success("Job card created!");
@@ -198,10 +203,12 @@ export default function JobCards() {
                 <p className="text-sm text-slate-700 mb-3 line-clamp-2">{job.work_description}</p>
 
                 <div className="grid grid-cols-2 gap-2 text-xs text-slate-500 mb-3">
+                  {job.coupon_no != null && <div>Coupon: <span className="font-medium text-slate-700">#{job.coupon_no}</span></div>}
+                  {job.job_date && <div>Job Date: <span className="font-medium text-slate-700">{formatBSDate(job.job_date)} BS</span></div>}
                   <div>Mechanic: <span className="font-medium text-slate-700">{job.mechanic_name}</span></div>
                   <div>Est: <span className="font-medium text-slate-700">{formatNPR(job.estimated_cost)}</span></div>
                   {job.actual_cost != null && <div className={overBudget ? "text-red-600 font-medium" : ""}>Actual: <span className="font-medium">{formatNPR(job.actual_cost)}</span></div>}
-                  <div>Date: <span className="font-medium text-slate-700">{job.created_at?.slice(0, 10)}</span></div>
+                  <div>Created: <span className="font-medium text-slate-700">{job.created_at?.slice(0, 10)}</span></div>
                 </div>
 
                 {/* Parts used in this job */}
@@ -254,16 +261,26 @@ export default function JobCards() {
               <button onClick={() => setShowModal(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
             </div>
             <form onSubmit={createJob} className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Vehicle <span className="text-red-500">*</span></label>
+                  <VehicleComboBox
+                    vehicles={vehicles}
+                    value={form.vehicle_id}
+                    onChange={id => setForm({...form, vehicle_id: id})}
+                    placeholder="Search or select a vehicle..."
+                    testId="job-vehicle"
+                    tagStatus
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Coupon No. <span className="text-red-500">*</span></label>
+                  <input type="text" inputMode="numeric" value={form.coupon_no} onChange={e => setForm({...form, coupon_no: e.target.value})} placeholder="0" className={inp} data-testid="job-coupon-no-input" />
+                </div>
+              </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Vehicle <span className="text-red-500">*</span></label>
-                <VehicleComboBox
-                  vehicles={vehicles}
-                  value={form.vehicle_id}
-                  onChange={id => setForm({...form, vehicle_id: id})}
-                  placeholder="Search or select a vehicle..."
-                  testId="job-vehicle"
-                  tagStatus
-                />
+                <label className="block text-xs font-medium text-slate-600 mb-1">Job Date (BS) <span className="text-red-500">*</span></label>
+                <BSDatePicker value={form.job_date} onChange={val => setForm({...form, job_date: val})} required data-testid="job-date-input" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Work Description <span className="text-red-500">*</span></label>

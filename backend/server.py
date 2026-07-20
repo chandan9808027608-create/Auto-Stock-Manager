@@ -400,6 +400,7 @@ class JobCardCreate(BaseModel):
     vehicle_id: str; work_description: str
     mechanic_id: Optional[str] = None; mechanic_name: str
     estimated_cost: float; notes: Optional[str] = None
+    coupon_no: int; job_date: str
     parts: List[dict] = []
 
 class JobCardUpdate(BaseModel):
