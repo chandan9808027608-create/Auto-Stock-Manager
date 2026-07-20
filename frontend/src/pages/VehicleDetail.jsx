@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2, Edit, CheckCircle, AlertCircle, Clock, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
-import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, getJobStyle, EXPENSE_CATEGORIES, VEHICLE_STATUS_OPTIONS, CONDITIONS, SOURCES } from "../utils/helpers";
+import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, getJobStyle, EXPENSE_CATEGORIES, VEHICLE_STATUS_OPTIONS, CONDITIONS, SOURCES, BRANDS, FUEL_TYPES } from "../utils/helpers";
 import { ExpenseModal, JobCardModal, QRLabelModal, inp, sel } from "./VehicleModals";
 import HoverADDate from "../components/HoverADDate";
 import BSDatePicker from "../components/BSDatePicker";
@@ -190,10 +190,29 @@ export default function VehicleDetail() {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate("/inventory")} className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"><ArrowLeft size={18} /></button>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">{vehicle.brand} {vehicle.model}</h1>
-            <p className="text-sm text-slate-500">{vehicle.year} · {vehicle.engine_cc}cc · {vehicle.fuel_type}</p>
-          </div>
+          {isEditing ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto">
+              <select data-testid="edit-brand-select" value={editForm.brand || ""} onChange={e => setEditForm({ ...editForm, brand: e.target.value })} className={`${sel} sm:w-32`}>
+                <option value="">Select Brand</option>
+                {BRANDS.map(b => <option key={b}>{b}</option>)}
+              </select>
+              <input data-testid="edit-model-input" value={editForm.model || ""} onChange={e => setEditForm({ ...editForm, model: e.target.value })} placeholder="Model" className={`${inp} sm:w-32`} />
+              <input data-testid="edit-year-input" type="text" inputMode="numeric" pattern="[0-9]*" value={editForm.year || ""} onChange={e => setEditForm({ ...editForm, year: e.target.value })} placeholder="Year" className={`${inp} sm:w-24`} />
+              <input data-testid="edit-engine-cc-input" type="text" inputMode="numeric" pattern="[0-9]*" value={editForm.engine_cc || ""} onChange={e => setEditForm({ ...editForm, engine_cc: e.target.value })} placeholder="Engine CC" className={`${inp} sm:w-24`} />
+              <select data-testid="edit-fuel-type-select" value={editForm.fuel_type || ""} onChange={e => setEditForm({ ...editForm, fuel_type: e.target.value })} className={`${sel} sm:w-28`}>
+                {FUEL_TYPES.map(f => <option key={f}>{f}</option>)}
+              </select>
+              <select data-testid="edit-vehicle-type-select" value={editForm.vehicle_type || "bike"} onChange={e => setEditForm({ ...editForm, vehicle_type: e.target.value })} className={`${sel} sm:w-28`}>
+                <option value="bike">Bike</option>
+                <option value="scooter">Scooter</option>
+              </select>
+            </div>
+          ) : (
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900">{vehicle.brand} {vehicle.model}</h1>
+              <p className="text-sm text-slate-500">{vehicle.year} · {vehicle.engine_cc}cc · {vehicle.fuel_type}</p>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${ag.bg} ${ag.text}`}>{vehicle.aging?.days}d · {ag.label}</span>
