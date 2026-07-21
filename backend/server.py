@@ -92,7 +92,7 @@ ROLE_PERMISSIONS = {
     },
     "parts_supervisor": {  # Parts department
         "spare_parts": {"view", "create", "edit", "delete"},
-        "jobs": {"view", "create", "edit"},
+        "jobs": {"view", "create", "edit", "delete"},
         "vehicles": {"view"},  # read-only, needed to pick a vehicle when creating a job card
         "vendor_lookup": {"view", "create"},  # supplier picker + inline "add new vendor" on a part
         "team": {"view", "create", "edit", "delete"},
@@ -1023,7 +1023,7 @@ async def update_job(jid: str, job: JobCardUpdate, cu: dict = Depends(require("j
     return await db.job_cards.find_one({"id": jid}, {"_id": 0})
 
 @api_router.delete("/jobs/{jid}")
-async def delete_job(jid: str, cu: dict = Depends(admin_only)):
+async def delete_job(jid: str, cu: dict = Depends(require("jobs", "delete"))):
     r = await db.job_cards.delete_one({"id": jid})
     if r.deleted_count == 0: raise HTTPException(404, "Job not found")
     return {"message": "Deleted"}

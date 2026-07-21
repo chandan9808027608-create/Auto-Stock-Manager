@@ -16,11 +16,11 @@ export function canAccessPath(role, path) {
   return allowed.some((p) => path === p || path.startsWith(p + "/"));
 }
 
-// Job Cards tab is shared: Front desk stock can only view, Parts department can create/edit, only admin can delete.
+// Job Cards tab is shared: Front desk stock can only view, Parts department has full create/edit/delete access.
 export function canEditJobs(role) {
   return !role || role === "admin" || role === "parts_supervisor";
 }
 
 export function canDeleteJobs(role) {
-  return !role || role === "admin";
+  return !role || role === "admin" || role === "parts_supervisor";
 }
