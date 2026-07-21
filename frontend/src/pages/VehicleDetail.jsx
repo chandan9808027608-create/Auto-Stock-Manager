@@ -95,6 +95,7 @@ export default function VehicleDetail() {
   const saveEdit = async (e) => {
     e.preventDefault();
     if (!editForm.registration_number) { toast.error("Registration Number is required"); return; }
+    if (!editForm.purchase_price) { toast.error("Purchase Price is required"); return; }
     setSaving(true);
     try {
       await api.put(`/vehicles/${id}`, { ...editForm, purchase_price: Number(editForm.purchase_price), selling_price: editForm.selling_price ? Number(editForm.selling_price) : null, minimum_selling_price: editForm.minimum_selling_price ? Number(editForm.minimum_selling_price) : null, year: Number(editForm.year), engine_cc: Number(editForm.engine_cc), ownership_number: Number(editForm.ownership_number) });
@@ -351,6 +352,23 @@ export default function VehicleDetail() {
                   </div>
                 ) : (
                   <span className="text-sm font-medium text-slate-900 sm:text-right"><HoverADDate date={vehicle.purchase_date} /></span>
+                )}
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
+                <span className="text-sm text-slate-500 shrink-0">Purchase Price</span>
+                {isEditing ? (
+                  <input
+                    data-testid="edit-purchase-price-input"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={editForm.purchase_price ?? ""}
+                    onChange={e => setEditForm({ ...editForm, purchase_price: e.target.value })}
+                    placeholder="e.g. 150000"
+                    className={`${inp} w-full sm:w-40 sm:text-right`}
+                  />
+                ) : (
+                  <span className="text-sm font-medium text-slate-900 sm:text-right">{formatNPR(vehicle.purchase_price)}</span>
                 )}
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
