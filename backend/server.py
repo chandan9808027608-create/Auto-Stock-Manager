@@ -11,6 +11,8 @@ from pathlib import Path
 import os, logging, jwt, uuid, json, base64, io, asyncio
 from pydantic import BaseModel, Field
 from PIL import Image, ImageOps
+import pillow_heif
+pillow_heif.register_heif_opener()  # lets Image.open() decode HEIC/HEIF from iPhone cameras
 from google import genai
 from google.genai import types as genai_types
 
@@ -1684,8 +1686,9 @@ app.add_middleware(CORSMiddleware, allow_credentials=True,
 # free-tier filesystem is ephemeral and wipes local files on every restart,
 # which was causing uploaded photos/docs to vanish after the backend slept.
 # ══════════════════════════════════════════════════════════════════════
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-MAX_PHOTO_SIZE = 5 * 1024 * 1024  # 5 MB
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"}
+MAX_PHOTO_SIZE = 5 * 1024 * 1024  # 5 MB, enforced on the compressed output
+RAW_UPLOAD_MAX = 25 * 1024 * 1024  # 25 MB cap on the original file straight off a phone camera
 PHOTO_MAX_DIMENSION = 1600  # px, longest side
 PHOTO_JPEG_QUALITY = 80
 
@@ -1720,15 +1723,17 @@ async def upload_vehicle_photo(vid: str, file: UploadFile = File(...), cu: dict 
     v = await db.vehicles.find_one({"id": vid})
     if not v: raise HTTPException(404, "Vehicle not found")
     if file.content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(400, f"File type {file.content_type} not allowed. Use JPEG/PNG/WebP.")
+        raise HTTPException(400, f"File type {file.content_type} not allowed. Use JPEG/PNG/WebP/HEIC.")
     content = await file.read()
-    if len(content) > MAX_PHOTO_SIZE:
-        raise HTTPException(400, "File too large. Max 5MB.")
+    if len(content) > RAW_UPLOAD_MAX:
+        raise HTTPException(400, "File too large. Max 25MB.")
     content_type = file.content_type
     try:
         content, content_type = _compress_photo(content)
     except Exception:
         logger.warning(f"Photo compression failed for upload to vehicle {vid}, storing original", exc_info=True)
+    if len(content) > MAX_PHOTO_SIZE:
+        raise HTTPException(400, "File too large. Max 5MB.")
     photo_id = str(uuid.uuid4())
     photo = {
         "id": photo_id, "vehicle_id": vid, "filename": file.filename or f"{photo_id}.jpg",
@@ -1748,7 +1753,7 @@ async def delete_vehicle_photo(vid: str, photo_id: str, cu: dict = Depends(requi
 # ── LEGAL DOCUMENT UPLOAD ─────────────────────────────────────────────
 # Also stored as base64 in MongoDB (db.legal_documents) for the same reason.
 # ══════════════════════════════════════════════════════════════════════
-ALLOWED_DOC_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/webp"}
+ALLOWED_DOC_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"}
 DOC_TYPES = ["bluebook", "insurance", "tax_clearance", "transfer", "other"]
 
 def _doc_out(d: dict) -> dict:
@@ -1768,7 +1773,7 @@ async def upload_legal_document(vid: str, file: UploadFile = File(...), doc_type
     v = await db.vehicles.find_one({"id": vid})
     if not v: raise HTTPException(404, "Vehicle not found")
     if file.content_type not in ALLOWED_DOC_TYPES:
-        raise HTTPException(400, "Only PDF/JPEG/PNG allowed for documents.")
+        raise HTTPException(400, "Only PDF/JPEG/PNG/HEIC allowed for documents.")
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(400, "File too large. Max 10MB.")
