@@ -9,6 +9,8 @@ import HoverADDate from "../components/HoverADDate";
 import { useAuth } from "../context/AuthContext";
 
 const STATUSES = ["all", ...VEHICLE_STATUS_OPTIONS.map(o => o.value)];
+const AGING_CATEGORIES = ["all", "fresh", "normal", "slow", "dead"];
+const AGING_RANGES = { fresh: "0–30 days", normal: "31–45 days", slow: "46–60 days", dead: "60+ days" };
 
 const EMPTY = {
   brand: "", model: "", year: new Date().getFullYear(), engine_cc: 125, fuel_type: "Petrol", vehicle_type: "bike",
@@ -26,9 +28,9 @@ export default function Inventory() {
   const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("aging") ? "available" : "all");
   const [brandFilter, setBrandFilter] = useState("all");
-  const [agingFilter, setAgingFilter] = useState(searchParams.get("aging") || "");
+  const [agingFilter, setAgingFilter] = useState(searchParams.get("aging") || "all");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
@@ -78,19 +80,8 @@ export default function Inventory() {
   useEffect(() => {
     let result = [...vehicles];
 
-    // Aging filter (from URL ?aging=dead|slow) — only count available vehicles
-    // to stay consistent with dashboard dead_stock_count which counts available-only
-    if (agingFilter) {
-      result = result.filter(v => v.status === "available" && v.aging?.category === agingFilter);
-      if (result.length === 0) {
-        console.log(`[Inventory] aging filter "${agingFilter}" returned 0 results. Total vehicles: ${vehicles.length}`);
-      } else {
-        console.log(`[Inventory] aging filter "${agingFilter}" matched ${result.length} available vehicles`);
-      }
-    } else {
-      if (statusFilter !== "all") result = result.filter(v => v.status === statusFilter);
-    }
-
+    if (statusFilter !== "all") result = result.filter(v => v.status === statusFilter);
+    if (agingFilter !== "all") result = result.filter(v => v.aging?.category === agingFilter);
     if (brandFilter !== "all") result = result.filter(v => v.brand === brandFilter);
     if (search) {
       const q = search.toLowerCase();
@@ -173,14 +164,14 @@ export default function Inventory() {
       </div>
 
       {/* Active Aging Filter Banner */}
-      {agingFilter && (
-        <div className={`flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium border ${agingFilter === "dead" ? "bg-red-50 border-red-200 text-red-700" : "bg-orange-50 border-orange-200 text-orange-700"}`} data-testid="aging-filter-banner">
+      {agingFilter !== "all" && (
+        <div className={`flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium border ${getAgingStyle(agingFilter).bg} ${getAgingStyle(agingFilter).border} ${getAgingStyle(agingFilter).text}`} data-testid="aging-filter-banner">
           <span>
-            Showing: <strong>{agingFilter === "dead" ? "Dead Stock (60+ days)" : "Slow Moving (46–60 days)"}</strong> — available vehicles only
+            Showing: <strong>{getAgingStyle(agingFilter).label} ({AGING_RANGES[agingFilter]})</strong>
           </span>
           <button
             data-testid="clear-aging-filter"
-            onClick={() => { setAgingFilter(""); setSearchParams({}); }}
+            onClick={() => { setAgingFilter("all"); setSearchParams({}); }}
             className="flex items-center gap-1 ml-3 hover:opacity-70 transition-opacity"
           >
             <X size={14} /> Clear filter
@@ -220,6 +211,21 @@ export default function Inventory() {
             <option value="all">All Brands</option>
             {BRANDS.map(b => <option key={b}>{b}</option>)}
           </select>
+          <select
+            value={agingFilter}
+            onChange={e => {
+              const val = e.target.value;
+              setAgingFilter(val);
+              if (val === "all") setSearchParams({});
+              else setSearchParams({ aging: val });
+            }}
+            data-testid="aging-filter-select"
+            className="h-9 px-3 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {AGING_CATEGORIES.map(a => (
+              <option key={a} value={a}>{a === "all" ? "All Stock Age" : `${getAgingStyle(a).label} (${AGING_RANGES[a]})`}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -254,20 +260,20 @@ export default function Inventory() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-slate-500" data-testid="empty-state">
             <p className="font-medium">
-              {agingFilter
-                ? `No ${agingFilter === "dead" ? "dead stock (60+ days)" : "slow moving (46–60 days)"} vehicles found`
+              {agingFilter !== "all"
+                ? `No ${getAgingStyle(agingFilter).label.toLowerCase()} (${AGING_RANGES[agingFilter]}) vehicles found`
                 : "No vehicles found"}
             </p>
             <p className="text-sm mt-1">
-              {agingFilter
-                ? "All available vehicles are within healthy stock age — great!"
+              {agingFilter !== "all"
+                ? "No vehicles fall into this stock age range right now."
                 : search || statusFilter !== "all" || brandFilter !== "all"
                   ? "Try adjusting your filters"
                   : "Add your first vehicle to get started"}
             </p>
-            {agingFilter && (
+            {agingFilter !== "all" && (
               <button
-                onClick={() => { setAgingFilter(""); setSearchParams({}); }}
+                onClick={() => { setAgingFilter("all"); setSearchParams({}); }}
                 className="mt-3 text-sm text-blue-600 hover:underline"
                 data-testid="empty-clear-filter"
               >
