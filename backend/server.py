@@ -984,10 +984,40 @@ async def create_job(job: JobCardCreate, cu: dict = Depends(require("jobs", "cre
 
 @api_router.put("/jobs/{jid}")
 async def update_job(jid: str, job: JobCardUpdate, cu: dict = Depends(require("jobs", "edit"))):
+    existing = await db.job_cards.find_one({"id": jid}, {"_id": 0})
+    if not existing: raise HTTPException(404, "Job not found")
     upd = {k: v for k, v in job.model_dump().items() if v is not None}
     if upd.get("status") == "completed":
         upd["completed_at"] = datetime.now(timezone.utc).isoformat()
     upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    if "parts" in upd:
+        old_qtys = {p["part_id"]: int(p.get("quantity", 0)) for p in existing.get("parts", []) if p.get("part_id")}
+        new_qtys = {p["part_id"]: int(p.get("quantity", 0)) for p in upd["parts"] if p.get("part_id")}
+        diffs = {}
+        part_info = {}
+        for part_id in set(old_qtys) | set(new_qtys):
+            diff = new_qtys.get(part_id, 0) - old_qtys.get(part_id, 0)
+            if diff == 0: continue
+            pp = await db.spare_parts.find_one({"id": part_id}, {"_id": 0, "quantity": 1, "name": 1})
+            if not pp: continue
+            if diff > 0 and pp.get("quantity", 0) < diff:
+                raise HTTPException(400, f"Not enough stock for {pp.get('name')}: only {pp.get('quantity', 0)} left")
+            diffs[part_id] = diff
+            part_info[part_id] = pp
+        for part_id, diff in diffs.items():
+            pp = part_info[part_id]
+            await db.spare_parts.update_one({"id": part_id}, {"$set": {"quantity": max(0, pp.get("quantity", 0) - diff)}})
+            txn = {
+                "id": str(uuid.uuid4()), "part_id": part_id, "part_name": pp.get("name"),
+                "type": "out" if diff > 0 else "in", "quantity": abs(diff),
+                "reason": "Used in Job Card" if diff > 0 else "Removed from Job Card",
+                "date": datetime.now(timezone.utc).date().isoformat(),
+                "job_id": jid, "notes": f"Job {existing.get('job_number')} updated",
+                "created_by": cu.get("username"), "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.part_transactions.insert_one(txn)
+
     r = await db.job_cards.update_one({"id": jid}, {"$set": upd})
     if r.matched_count == 0: raise HTTPException(404, "Job not found")
     return await db.job_cards.find_one({"id": jid}, {"_id": 0})
