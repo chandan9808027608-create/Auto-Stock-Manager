@@ -53,6 +53,15 @@ h1, h2, h3, h4, h5, h6 {
 /* Table hover */
 .table-row-hover:hover { background: #F8FAFC; }
 
+/* iOS Safari auto-zooms the page when a focused input's font-size is under
+   16px. Our compact inputs use text-sm (14px), so bump it back to 16px only
+   on mobile viewports to stop the zoom without changing the desktop look. */
+@media screen and (max-width: 640px) {
+  input, select, textarea {
+    font-size: 16px;
+  }
+}
+
 /* Animate fade in */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(12px); }
