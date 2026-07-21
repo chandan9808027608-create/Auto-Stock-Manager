@@ -128,6 +128,19 @@ def stock_aging(purchase_date_str: str) -> dict:
     elif days <= 60: return {"days": days, "category": "slow",   "label": "Slow Moving"}
     else:            return {"days": days, "category": "dead",   "label": "Dead Stock Alert"}
 
+# Front desk stock can record purchase price at intake and manage expenses,
+# but must never see the numbers that reveal profit on existing stock.
+FRONT_DESK_HIDDEN_VEHICLE_FIELDS = {
+    "purchase_price", "total_investment", "expected_profit", "profit_margin",
+    "low_margin", "accessories_cost", "minimum_selling_price",
+}
+
+def _hide_financials_for_role(v: dict, role: str) -> dict:
+    if role == "stock_supervisor":
+        for f in FRONT_DESK_HIDDEN_VEHICLE_FIELDS:
+            v.pop(f, None)
+    return v
+
 async def enrich_vehicle(v: dict) -> dict:
     v["aging"] = stock_aging(v.get("purchase_date", ""))
     exps = await db.expenses.find({"vehicle_id": v["id"]}, {"_id": 0}).to_list(200)
@@ -590,7 +603,8 @@ async def get_vehicles(status: Optional[str] = None, brand: Optional[str] = None
         else:
             v["expected_profit"] = None; v["profit_margin"] = None; v["low_margin"] = False
         return v
-    return [enrich_with_expenses(v, exps_by_vehicle.get(v["id"], [])) for v in vehicles]
+    role = cu.get("role", "admin")
+    return [_hide_financials_for_role(enrich_with_expenses(v, exps_by_vehicle.get(v["id"], [])), role) for v in vehicles]
 
 @api_router.post("/vehicles")
 async def create_vehicle(vehicle: VehicleCreate, cu: dict = Depends(require("vehicles", "create"))):
@@ -833,7 +847,7 @@ async def get_vehicle(vid: str, cu: dict = Depends(require("vehicles", "view")))
     v = await enrich_vehicle(v)
     v["expenses"] = await db.expenses.find({"vehicle_id": vid}, {"_id": 0}).to_list(200)
     v["job_cards"] = await db.job_cards.find({"vehicle_id": vid}, {"_id": 0}).to_list(100)
-    return v
+    return _hide_financials_for_role(v, cu.get("role", "admin"))
 
 @api_router.put("/vehicles/{vid}")
 async def update_vehicle(vid: str, vehicle: VehicleUpdate, cu: dict = Depends(require("vehicles", "edit"))):

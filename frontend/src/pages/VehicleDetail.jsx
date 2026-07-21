@@ -8,6 +8,7 @@ import { ExpenseModal, JobCardModal, QRLabelModal, inp, sel } from "./VehicleMod
 import HoverADDate from "../components/HoverADDate";
 import BSDatePicker from "../components/BSDatePicker";
 import VendorAutocomplete from "../components/VendorAutocomplete";
+import { useAuth } from "../context/AuthContext";
 
 const DocCard = ({ label, status }) => {
   const s = getDocStyle(status);
@@ -27,6 +28,8 @@ const DocCard = ({ label, status }) => {
 export default function VehicleDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isFrontDesk = user?.role === "stock_supervisor";
   const [vehicle, setVehicle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
@@ -95,10 +98,13 @@ export default function VehicleDetail() {
   const saveEdit = async (e) => {
     e.preventDefault();
     if (!editForm.registration_number) { toast.error("Registration Number is required"); return; }
-    if (!editForm.purchase_price) { toast.error("Purchase Price is required"); return; }
+    if (!isFrontDesk && !editForm.purchase_price) { toast.error("Purchase Price is required"); return; }
     setSaving(true);
     try {
-      await api.put(`/vehicles/${id}`, { ...editForm, purchase_price: Number(editForm.purchase_price), selling_price: editForm.selling_price ? Number(editForm.selling_price) : null, minimum_selling_price: editForm.minimum_selling_price ? Number(editForm.minimum_selling_price) : null, year: Number(editForm.year), engine_cc: Number(editForm.engine_cc), ownership_number: Number(editForm.ownership_number) });
+      const payload = { ...editForm, selling_price: editForm.selling_price ? Number(editForm.selling_price) : null, year: Number(editForm.year), engine_cc: Number(editForm.engine_cc), ownership_number: Number(editForm.ownership_number) };
+      if (isFrontDesk) { delete payload.purchase_price; delete payload.minimum_selling_price; delete payload.accessories_cost; }
+      else { payload.purchase_price = Number(editForm.purchase_price); payload.minimum_selling_price = editForm.minimum_selling_price ? Number(editForm.minimum_selling_price) : null; }
+      await api.put(`/vehicles/${id}`, payload);
       toast.success("Vehicle updated"); setIsEditing(false); fetchVehicle();
     } catch { toast.error("Failed to update"); } finally { setSaving(false); }
   };
@@ -166,6 +172,9 @@ export default function VehicleDetail() {
 
   const financialCards = useMemo(() => {
     if (!vehicle) return [];
+    if (isFrontDesk) {
+      return [{ label: "Total Expenses", value: formatNPR(vehicle.total_expenses), bold: false, highlight: false }];
+    }
     return [
       { label: "Purchase Price", value: formatNPR(vehicle.purchase_price), bold: false, highlight: false },
       { label: "Total Expenses", value: formatNPR(vehicle.total_expenses), bold: false, highlight: false },
@@ -177,7 +186,7 @@ export default function VehicleDetail() {
         highlight: vehicle.profit_margin !== null,
       },
     ];
-  }, [vehicle]);
+  }, [vehicle, isFrontDesk]);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full" /></div>;
   if (!vehicle) return null;
@@ -354,23 +363,25 @@ export default function VehicleDetail() {
                   <span className="text-sm font-medium text-slate-900 sm:text-right"><HoverADDate date={vehicle.purchase_date} /></span>
                 )}
               </div>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
-                <span className="text-sm text-slate-500 shrink-0">Purchase Price</span>
-                {isEditing ? (
-                  <input
-                    data-testid="edit-purchase-price-input"
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={editForm.purchase_price ?? ""}
-                    onChange={e => setEditForm({ ...editForm, purchase_price: e.target.value })}
-                    placeholder="e.g. 150000"
-                    className={`${inp} w-full sm:w-40 sm:text-right`}
-                  />
-                ) : (
-                  <span className="text-sm font-medium text-slate-900 sm:text-right">{formatNPR(vehicle.purchase_price)}</span>
-                )}
-              </div>
+              {!isFrontDesk && (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
+                  <span className="text-sm text-slate-500 shrink-0">Purchase Price</span>
+                  {isEditing ? (
+                    <input
+                      data-testid="edit-purchase-price-input"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={editForm.purchase_price ?? ""}
+                      onChange={e => setEditForm({ ...editForm, purchase_price: e.target.value })}
+                      placeholder="e.g. 150000"
+                      className={`${inp} w-full sm:w-40 sm:text-right`}
+                    />
+                  ) : (
+                    <span className="text-sm font-medium text-slate-900 sm:text-right">{formatNPR(vehicle.purchase_price)}</span>
+                  )}
+                </div>
+              )}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
                 <span className="text-sm text-slate-500 shrink-0">Selling Price</span>
                 {isEditing ? (
@@ -388,23 +399,25 @@ export default function VehicleDetail() {
                   <span className="text-sm font-medium text-slate-900 sm:text-right">{vehicle.selling_price ? formatNPR(vehicle.selling_price) : "Not set"}</span>
                 )}
               </div>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
-                <span className="text-sm text-slate-500 shrink-0">Minimum Selling Price</span>
-                {isEditing ? (
-                  <input
-                    data-testid="edit-minimum-selling-price-input"
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={editForm.minimum_selling_price ?? ""}
-                    onChange={e => setEditForm({ ...editForm, minimum_selling_price: e.target.value })}
-                    placeholder="e.g. 170000"
-                    className={`${inp} w-full sm:w-40 sm:text-right`}
-                  />
-                ) : (
-                  <span className="text-sm font-medium text-slate-900 sm:text-right">{vehicle.minimum_selling_price ? formatNPR(vehicle.minimum_selling_price) : "Not set"}</span>
-                )}
-              </div>
+              {!isFrontDesk && (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
+                  <span className="text-sm text-slate-500 shrink-0">Minimum Selling Price</span>
+                  {isEditing ? (
+                    <input
+                      data-testid="edit-minimum-selling-price-input"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={editForm.minimum_selling_price ?? ""}
+                      onChange={e => setEditForm({ ...editForm, minimum_selling_price: e.target.value })}
+                      placeholder="e.g. 170000"
+                      className={`${inp} w-full sm:w-40 sm:text-right`}
+                    />
+                  ) : (
+                    <span className="text-sm font-medium text-slate-900 sm:text-right">{vehicle.minimum_selling_price ? formatNPR(vehicle.minimum_selling_price) : "Not set"}</span>
+                  )}
+                </div>
+              )}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
                 <span className="text-sm text-slate-500 shrink-0">Sold Date</span>
                 <span className="text-sm font-medium text-slate-900 sm:text-right">{vehicle.sold_date ? <HoverADDate date={vehicle.sold_date} /> : "—"}</span>

@@ -23,6 +23,7 @@ export default function Inventory() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isAdmin = !user?.role || user.role === "admin";
+  const isFrontDesk = user?.role === "stock_supervisor";
   const [searchParams, setSearchParams] = useSearchParams();
   const [vehicles, setVehicles] = useState([]);
   const [filtered, setFiltered] = useState([]);
@@ -234,10 +235,10 @@ export default function Inventory() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: "Total Vehicles", value: filtered.length, icon: Package, color: "bg-blue-500" },
-            { label: "Total Investment", value: formatNPR(totalInvestment), icon: Wallet, color: "bg-indigo-500" },
-            { label: "Locked Capital", value: formatNPR(lockedCapital), icon: Lock, color: "bg-purple-500" },
+            !isFrontDesk && { label: "Total Investment", value: formatNPR(totalInvestment), icon: Wallet, color: "bg-indigo-500" },
+            !isFrontDesk && { label: "Locked Capital", value: formatNPR(lockedCapital), icon: Lock, color: "bg-purple-500" },
             { label: "Total Selling Price", value: formatNPR(totalSellingPrice), icon: DollarSign, color: "bg-green-500" },
-          ].map(c => (
+          ].filter(Boolean).map(c => (
             <div key={c.label} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3">
               <div className={`w-9 h-9 rounded-lg ${c.color} flex items-center justify-center shrink-0`}>
                 <c.icon size={16} className="text-white" />
@@ -286,7 +287,7 @@ export default function Inventory() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-100">
-                  {["Brand & Model", "Year / CC", "Reg Number", "Purchase Source", "Purchase Date", "Age", "Investment", "Selling Price", "Margin", "Status", ""].map(h => (
+                  {["Brand & Model", "Year / CC", "Reg Number", "Purchase Source", "Purchase Date", "Age", !isFrontDesk && "Investment", "Selling Price", !isFrontDesk && "Margin", "Status", ""].filter(Boolean).map(h => (
                     <th key={h} className="text-left text-xs font-semibold uppercase tracking-wider text-slate-500 px-4 py-3 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -315,13 +316,15 @@ export default function Inventory() {
                           {v.aging?.days}d · {ag.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-slate-800 whitespace-nowrap">{formatNPR(v.total_investment)}</td>
+                      {!isFrontDesk && <td className="px-4 py-3 text-sm font-medium text-slate-800 whitespace-nowrap">{formatNPR(v.total_investment)}</td>}
                       <td className="px-4 py-3 text-sm text-slate-700 whitespace-nowrap">{v.selling_price ? formatNPR(v.selling_price) : "—"}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {v.profit_margin !== null && v.profit_margin !== undefined ? (
-                          <span className={`text-sm font-semibold ${v.low_margin ? "text-red-600" : "text-green-600"}`}>{v.profit_margin}%</span>
-                        ) : "—"}
-                      </td>
+                      {!isFrontDesk && (
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {v.profit_margin !== null && v.profit_margin !== undefined ? (
+                            <span className={`text-sm font-semibold ${v.low_margin ? "text-red-600" : "text-green-600"}`}>{v.profit_margin}%</span>
+                          ) : "—"}
+                        </td>
+                      )}
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${st.bg} ${st.text}`}>{st.label}</span>
                       </td>
