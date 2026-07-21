@@ -2045,5 +2045,4 @@ async def public_create_lead(lead: LeadCreate):
 @app.on_event("shutdown")
 async def shutdown(): client.close()
 
-
 app.include_router(api_router)
