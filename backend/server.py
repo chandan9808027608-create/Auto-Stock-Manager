@@ -518,6 +518,9 @@ class LeadCreate(BaseModel):
     name: str; phone: str
     message: Optional[str] = None
     images: Optional[List[str]] = None
+    requested_service: Optional[str] = None  # "service" leads: e.g. "Oil Change"
+    vehicle_type: Optional[str] = None  # "service" leads: e.g. "Bike - Pulsar 150"
+    preferred_date: Optional[str] = None  # "service" leads: preferred servicing date
 
 class LeadUpdate(BaseModel):
     status: str  # "new" | "contacted" | "closed"

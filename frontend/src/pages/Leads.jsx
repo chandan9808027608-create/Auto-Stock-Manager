@@ -1,11 +1,23 @@
 import { useEffect, useState, useCallback } from "react";
-import { Phone, Trash2, ImageIcon } from "lucide-react";
+import { Phone, Trash2, ImageIcon, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
-import { formatDateDual } from "../utils/helpers";
+import { formatDateDual, getWhatsAppLink } from "../utils/helpers";
 
 const TYPE_LABELS = { sell: "Sell", exchange: "Exchange", service: "Book Service" };
 const STATUS_OPTIONS = ["new", "contacted", "closed"];
+const BUSINESS_NAME = "G&G Auto Enterprise and Recondition House";
+const WORKSHOP_ADDRESS = "Nayabasti, Boudha";
+
+const buildWhatsAppMessage = (l) => {
+  if (l.type === "service") {
+    const service = l.requested_service || "your requested service";
+    const vehicle = l.vehicle_type || "your vehicle";
+    const date = l.preferred_date ? formatDateDual(l.preferred_date) : "your preferred date";
+    return `We at ${BUSINESS_NAME} have received your request for ${service} of your vehicle ${vehicle}. You have booked the service at ${date}. Please contact this number or visit our workshop at ${WORKSHOP_ADDRESS} for any further queries. Thank you.`;
+  }
+  return `Hi ${l.name}, thank you for reaching out to ${BUSINESS_NAME} regarding your ${TYPE_LABELS[l.type] || l.type} inquiry. Please contact this number or visit our workshop at ${WORKSHOP_ADDRESS} for any further queries. Thank you.`;
+};
 
 export default function Leads() {
   const [leads, setLeads] = useState([]);
@@ -96,9 +108,27 @@ export default function Leads() {
                     >
                       {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
                     </select>
+                    <a
+                      href={getWhatsAppLink(l.phone, buildWhatsAppMessage(l))}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Contact on WhatsApp"
+                      data-testid="lead-whatsapp-btn"
+                      className="p-1.5 hover:bg-green-50 rounded-lg"
+                    >
+                      <MessageCircle size={14} className="text-green-500" />
+                    </a>
                     <button onClick={() => handleDelete(l.id)} className="p-1.5 hover:bg-red-50 rounded-lg"><Trash2 size={14} className="text-red-400" /></button>
                   </div>
                 </div>
+
+                {l.type === "service" && (l.requested_service || l.vehicle_type || l.preferred_date) && (
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+                    {l.requested_service && <span><span className="font-semibold text-slate-700">Service:</span> {l.requested_service}</span>}
+                    {l.vehicle_type && <span><span className="font-semibold text-slate-700">Vehicle:</span> {l.vehicle_type}</span>}
+                    {l.preferred_date && <span><span className="font-semibold text-slate-700">Preferred Date:</span> {formatDateDual(l.preferred_date)}</span>}
+                  </div>
+                )}
 
                 {l.message && (
                   <p className="mt-3 text-sm text-slate-700 bg-slate-50 rounded-lg px-3 py-2">{l.message}</p>

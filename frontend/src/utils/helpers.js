@@ -97,6 +97,14 @@ export const adToBS = (adDateStr) => {
   } catch { return "—"; }
 };
 
+// Builds a wa.me deep link. Nepali phone numbers are stored locally (e.g. "98XXXXXXXX");
+// wa.me requires the country code with no leading zero or "+".
+export const getWhatsAppLink = (phone, message) => {
+  const digits = (phone || "").replace(/\D/g, "").replace(/^0+/, "");
+  const withCountryCode = digits.startsWith("977") ? digits : `977${digits}`;
+  return `https://wa.me/${withCountryCode}?text=${encodeURIComponent(message)}`;
+};
+
 export const formatDateDual = (adDateStr) => {
   if (!adDateStr) return "—";
   try {
