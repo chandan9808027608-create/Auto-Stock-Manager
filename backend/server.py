@@ -8,7 +8,7 @@ from passlib.context import CryptContext
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-import os, logging, jwt, uuid, json, base64, io, asyncio
+import os, logging, jwt, uuid, json, base64, io, asyncio, re
 from pydantic import BaseModel, Field
 from PIL import Image, ImageOps
 import pillow_heif
@@ -611,6 +611,12 @@ async def get_vehicles(status: Optional[str] = None, brand: Optional[str] = None
 
 @api_router.post("/vehicles")
 async def create_vehicle(vehicle: VehicleCreate, cu: dict = Depends(require("vehicles", "create"))):
+    existing = await db.vehicles.find_one(
+        {"registration_number": {"$regex": f"^{re.escape(vehicle.registration_number.strip())}$", "$options": "i"}},
+        {"_id": 0, "id": 1},
+    )
+    if existing:
+        raise HTTPException(400, f"Registration number '{vehicle.registration_number}' is already in stock")
     v = vehicle.model_dump()
     v["id"] = str(uuid.uuid4())
     v["created_at"] = datetime.now(timezone.utc).isoformat()
@@ -765,6 +771,30 @@ async def import_vehicles(file: UploadFile = File(...), confirm: bool = False, c
     content = await file.read()
     docs, errors, row_results, total_data_rows = _parse_vehicle_import_rows(content, file.filename, cu["username"])
 
+    # Duplicate registration_number check — both within the sheet itself and against
+    # vehicles already in stock (case-insensitive, since dealers key inventory off this number).
+    ok_indices = [i for i, r in enumerate(row_results) if r["status"] == "ok"]
+    existing_regs_lower = {d["registration_number"].strip().lower() for d in await db.vehicles.find({}, {"_id": 0, "registration_number": 1}).to_list(100000) if d.get("registration_number")}
+    seen_in_sheet = {}
+    kept_docs = []
+    for doc, ri in zip(docs, ok_indices):
+        row = row_results[ri]
+        reg = (doc.get("registration_number") or "").strip()
+        reg_lower = reg.lower()
+        if reg_lower in existing_regs_lower:
+            reason = f"Registration number '{reg}' is already in stock"
+        elif reg_lower in seen_in_sheet:
+            reason = f"Duplicate registration number '{reg}' (also on row {seen_in_sheet[reg_lower]})"
+        else:
+            reason = None
+        if reason:
+            errors.append({"row": row["row"], "reason": reason})
+            row_results[ri] = {**row, "status": "error", "reason": reason}
+        else:
+            seen_in_sheet[reg_lower] = row["row"]
+            kept_docs.append(doc)
+    docs = kept_docs
+
     if errors:
         return {
             "committed": False,
@@ -857,6 +887,13 @@ async def update_vehicle(vid: str, vehicle: VehicleUpdate, cu: dict = Depends(re
     existing = await db.vehicles.find_one({"id": vid}, {"_id": 0})
     if not existing: raise HTTPException(404, "Vehicle not found")
     upd = {k: val for k, val in vehicle.model_dump().items() if val is not None}
+    if upd.get("registration_number") and upd["registration_number"].strip().lower() != (existing.get("registration_number") or "").strip().lower():
+        dup = await db.vehicles.find_one(
+            {"id": {"$ne": vid}, "registration_number": {"$regex": f"^{re.escape(upd['registration_number'].strip())}$", "$options": "i"}},
+            {"_id": 0, "id": 1},
+        )
+        if dup:
+            raise HTTPException(400, f"Registration number '{upd['registration_number']}' is already in stock")
     upd["updated_at"] = datetime.now(timezone.utc).isoformat()
     if upd.get("status") == "sold" and "sold_date" not in upd:
         upd["sold_date"] = datetime.now(timezone.utc).date().isoformat()

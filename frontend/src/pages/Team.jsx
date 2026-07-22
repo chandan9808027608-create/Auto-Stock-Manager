@@ -1,9 +1,21 @@
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Wrench, TrendingUp, Users, Trash2, Edit } from "lucide-react";
+import { Plus, Wrench, TrendingUp, Landmark, UserCog, Megaphone, Server, Users, Trash2, Edit } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatBSDate } from "../utils/nepali-date";
 import BSDatePicker from "../components/BSDatePicker";
+
+// ── Role config — add a new role by adding an entry here and to ROLE_ORDER ──
+const ROLE_META = {
+  mechanic: { label: "Mechanic", Icon: Wrench, avatar: "bg-blue-500", badge: "bg-blue-100 text-blue-700", statBg: "bg-blue-50 border-blue-100", statText: "text-blue-700", statLabel: "text-blue-600" },
+  sales: { label: "Sales Staff", Icon: TrendingUp, avatar: "bg-purple-500", badge: "bg-purple-100 text-purple-700", statBg: "bg-purple-50 border-purple-100", statText: "text-purple-700", statLabel: "text-purple-600" },
+  investor: { label: "Investor", Icon: Landmark, avatar: "bg-amber-500", badge: "bg-amber-100 text-amber-700", statBg: "bg-amber-50 border-amber-100", statText: "text-amber-700", statLabel: "text-amber-600" },
+  frontdesk_admin: { label: "Frontdesk Administrator", Icon: UserCog, avatar: "bg-teal-500", badge: "bg-teal-100 text-teal-700", statBg: "bg-teal-50 border-teal-100", statText: "text-teal-700", statLabel: "text-teal-600" },
+  social_media_manager: { label: "Social Media Manager", Icon: Megaphone, avatar: "bg-pink-500", badge: "bg-pink-100 text-pink-700", statBg: "bg-pink-50 border-pink-100", statText: "text-pink-700", statLabel: "text-pink-600" },
+  it_department: { label: "IT Department", Icon: Server, avatar: "bg-slate-500", badge: "bg-slate-200 text-slate-700", statBg: "bg-slate-50 border-slate-200", statText: "text-slate-700", statLabel: "text-slate-600" },
+};
+const ROLE_ORDER = ["mechanic", "sales", "investor", "frontdesk_admin", "social_media_manager", "it_department"];
+const roleMeta = (role) => ROLE_META[role] || ROLE_META.mechanic;
 
 export default function Team() {
   const [members, setMembers] = useState([]);
@@ -41,53 +53,55 @@ export default function Team() {
     catch { toast.error("Failed"); }
   };
 
-  const mechanics = members.filter(m => m.role === "mechanic");
-  const salesStaff = members.filter(m => m.role === "sales");
+  const groupedByRole = ROLE_ORDER.map(role => ({ role, meta: ROLE_META[role], members: members.filter(m => m.role === role) })).filter(g => g.members.length > 0);
 
   const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
   const sel = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
 
-  const MemberCard = ({ member }) => (
-    <div data-testid="team-member-card" className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${member.role === "mechanic" ? "bg-blue-500" : "bg-purple-500"}`}>
-            {member.name[0]?.toUpperCase()}
-          </div>
-          <div>
-            <div className="font-bold text-slate-900 text-sm">{member.name}</div>
-            <div className={`text-xs capitalize px-2 py-0.5 rounded-full font-medium inline-block mt-0.5 ${member.role === "mechanic" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>
-              {member.role === "mechanic" ? "Mechanic" : "Sales Staff"}
+  const MemberCard = ({ member }) => {
+    const meta = roleMeta(member.role);
+    return (
+      <div data-testid="team-member-card" className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-shadow">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${meta.avatar}`}>
+              {member.name[0]?.toUpperCase()}
+            </div>
+            <div>
+              <div className="font-bold text-slate-900 text-sm">{member.name}</div>
+              <div className={`text-xs px-2 py-0.5 rounded-full font-medium inline-block mt-0.5 ${meta.badge}`}>
+                {meta.label}
+              </div>
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <button onClick={() => openEdit(member)} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"><Edit size={14} className="text-slate-400" /></button>
-          <button onClick={() => handleDelete(member.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} className="text-red-400" /></button>
-        </div>
-      </div>
-
-      <div className="space-y-1.5 text-sm text-slate-600">
-        {member.contact && <div className="flex items-center gap-2"><span className="text-slate-400 text-xs">Phone:</span>{member.contact}</div>}
-        {member.specialization && <div className="flex items-center gap-2"><span className="text-slate-400 text-xs">Specialization:</span>{member.specialization}</div>}
-        {member.commission_rate && <div className="flex items-center gap-2"><span className="text-slate-400 text-xs">Commission:</span>{member.commission_rate}%</div>}
-        <div className="flex items-center gap-2"><span className="text-slate-400 text-xs">Joined:</span>{member.joining_date ? `${formatBSDate(member.joining_date)} BS` : "—"}</div>
-      </div>
-
-      {member.role === "mechanic" && (
-        <div className="mt-3 pt-3 border-t border-slate-50 grid grid-cols-2 gap-2">
-          <div className="text-center bg-slate-50 rounded-lg p-2">
-            <div className="text-lg font-bold text-slate-900" style={{ fontFamily: "Manrope" }}>{member.total_jobs || 0}</div>
-            <div className="text-xs text-slate-500">Total Jobs</div>
-          </div>
-          <div className="text-center bg-green-50 rounded-lg p-2">
-            <div className="text-lg font-bold text-green-700" style={{ fontFamily: "Manrope" }}>{member.completed_jobs || 0}</div>
-            <div className="text-xs text-green-600">Completed</div>
+          <div className="flex items-center gap-1">
+            <button onClick={() => openEdit(member)} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"><Edit size={14} className="text-slate-400" /></button>
+            <button onClick={() => handleDelete(member.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={14} className="text-red-400" /></button>
           </div>
         </div>
-      )}
-    </div>
-  );
+
+        <div className="space-y-1.5 text-sm text-slate-600">
+          {member.contact && <div className="flex items-center gap-2"><span className="text-slate-400 text-xs">Phone:</span>{member.contact}</div>}
+          {member.specialization && <div className="flex items-center gap-2"><span className="text-slate-400 text-xs">Specialization:</span>{member.specialization}</div>}
+          {member.commission_rate && <div className="flex items-center gap-2"><span className="text-slate-400 text-xs">Commission:</span>{member.commission_rate}%</div>}
+          <div className="flex items-center gap-2"><span className="text-slate-400 text-xs">Joined:</span>{member.joining_date ? `${formatBSDate(member.joining_date)} BS` : "—"}</div>
+        </div>
+
+        {member.role === "mechanic" && (
+          <div className="mt-3 pt-3 border-t border-slate-50 grid grid-cols-2 gap-2">
+            <div className="text-center bg-slate-50 rounded-lg p-2">
+              <div className="text-lg font-bold text-slate-900" style={{ fontFamily: "Manrope" }}>{member.total_jobs || 0}</div>
+              <div className="text-xs text-slate-500">Total Jobs</div>
+            </div>
+            <div className="text-center bg-green-50 rounded-lg p-2">
+              <div className="text-lg font-bold text-green-700" style={{ fontFamily: "Manrope" }}>{member.completed_jobs || 0}</div>
+              <div className="text-xs text-green-600">Completed</div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -102,41 +116,31 @@ export default function Team() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         <div className="bg-white border border-slate-200 rounded-xl p-4 text-center shadow-sm">
           <div className="text-2xl font-bold text-slate-900" style={{ fontFamily: "Manrope" }}>{members.length}</div>
           <div className="text-xs text-slate-500 mt-0.5">Total Staff</div>
         </div>
-        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-center">
-          <div className="text-2xl font-bold text-blue-700" style={{ fontFamily: "Manrope" }}>{mechanics.length}</div>
-          <div className="text-xs text-blue-600 mt-0.5 flex items-center justify-center gap-1"><Wrench size={11} />Mechanics</div>
-        </div>
-        <div className="bg-purple-50 border border-purple-100 rounded-xl p-4 text-center">
-          <div className="text-2xl font-bold text-purple-700" style={{ fontFamily: "Manrope" }}>{salesStaff.length}</div>
-          <div className="text-xs text-purple-600 mt-0.5 flex items-center justify-center gap-1"><TrendingUp size={11} />Sales Staff</div>
-        </div>
+        {groupedByRole.map(({ role, meta, members: roleMembers }) => (
+          <div key={role} className={`${meta.statBg} border rounded-xl p-4 text-center`}>
+            <div className={`text-2xl font-bold ${meta.statText}`} style={{ fontFamily: "Manrope" }}>{roleMembers.length}</div>
+            <div className={`text-xs ${meta.statLabel} mt-0.5 flex items-center justify-center gap-1`}><meta.Icon size={11} />{meta.label}</div>
+          </div>
+        ))}
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center h-48"><div className="animate-spin w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full" /></div>
       ) : (
         <>
-          {mechanics.length > 0 && (
-            <div>
-              <h2 className="text-base font-bold text-slate-900 mb-3 flex items-center gap-2" style={{ fontFamily: "Manrope" }}><Wrench size={17} className="text-blue-500" />Mechanics</h2>
+          {groupedByRole.map(({ role, meta, members: roleMembers }) => (
+            <div key={role}>
+              <h2 className="text-base font-bold text-slate-900 mb-3 flex items-center gap-2" style={{ fontFamily: "Manrope" }}><meta.Icon size={17} className={meta.statText} />{meta.label}</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {mechanics.map(m => <MemberCard key={m.id} member={m} />)}
+                {roleMembers.map(m => <MemberCard key={m.id} member={m} />)}
               </div>
             </div>
-          )}
-          {salesStaff.length > 0 && (
-            <div>
-              <h2 className="text-base font-bold text-slate-900 mb-3 flex items-center gap-2" style={{ fontFamily: "Manrope" }}><TrendingUp size={17} className="text-purple-500" />Sales Staff</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {salesStaff.map(m => <MemberCard key={m.id} member={m} />)}
-              </div>
-            </div>
-          )}
+          ))}
           {members.length === 0 && (
             <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-500">
               <Users size={40} className="mx-auto mb-3 text-slate-300" />
@@ -162,8 +166,7 @@ export default function Team() {
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Role <span className="text-red-500">*</span></label>
                 <select value={form.role} onChange={e => setForm({...form, role: e.target.value})} className={sel} data-testid="member-role-select">
-                  <option value="mechanic">Mechanic</option>
-                  <option value="sales">Sales Staff</option>
+                  {ROLE_ORDER.map(role => <option key={role} value={role}>{ROLE_META[role].label}</option>)}
                 </select>
               </div>
               <div>
