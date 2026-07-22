@@ -5,6 +5,7 @@ import api from "../utils/api";
 import { formatNPR } from "../utils/helpers";
 import { useAuth } from "../context/AuthContext";
 import VehicleComboBox from "../components/VehicleComboBox";
+import BSDatePicker from "../components/BSDatePicker";
 
 const PRESET_EXPENSES = [
   { name: "Registration Transfer Fee", amount: 2000 },
@@ -379,7 +380,7 @@ export default function Sales() {
 
               {/* Sale Date */}
               <Field label="Sale Date">
-                <input type="date" value={form.sale_date} onChange={e => setForm({...form, sale_date: e.target.value})} className={inp} />
+                <BSDatePicker value={form.sale_date} onChange={val => setForm({...form, sale_date: val})} data-testid="sale-date-input" />
               </Field>
 
               {/* Customer */}
