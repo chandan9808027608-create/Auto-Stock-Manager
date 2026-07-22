@@ -49,52 +49,6 @@ export function ExpenseModal({ onClose, onSubmit, form, setForm, saving }) {
   );
 }
 
-// ── Job Card Modal ─────────────────────────────────────────────────────
-export function JobCardModal({ onClose, onSubmit, form, setForm, saving, mechanics }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="flex items-center justify-between p-5 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">Create Job Card</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
-        </div>
-        <form onSubmit={onSubmit} className="p-5 space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Work Description <span className="text-red-500">*</span></label>
-            <textarea value={form.work_description} onChange={e => setForm({ ...form, work_description: e.target.value })} placeholder="Describe the work to be done..." rows={3} className="w-full px-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" data-testid="job-description-input" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Mechanic Name <span className="text-red-500">*</span></label>
-            {mechanics.length > 0 ? (
-              <select value={form.mechanic_name} onChange={e => setForm({ ...form, mechanic_name: e.target.value })} className={sel}>
-                <option value="">Select Mechanic</option>
-                {mechanics.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-                <option value="other">Other</option>
-              </select>
-            ) : (
-              <input value={form.mechanic_name} onChange={e => setForm({ ...form, mechanic_name: e.target.value })} placeholder="Mechanic name" className={inp} />
-            )}
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Estimated Cost (NPR) <span className="text-red-500">*</span></label>
-            <input type="number" value={form.estimated_cost} onChange={e => setForm({ ...form, estimated_cost: e.target.value })} placeholder="e.g. 3000" className={inp} data-testid="job-cost-input" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
-            <input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Additional notes..." className={inp} />
-          </div>
-          <div className="flex gap-3">
-            <button type="button" onClick={onClose} className="flex-1 h-10 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">Cancel</button>
-            <button type="submit" disabled={saving} className="flex-1 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60" data-testid="save-job-btn">
-              {saving ? "Saving..." : "Create Job Card"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 // ── QR Label Modal ─────────────────────────────────────────────────────
 export function QRLabelModal({ onClose, qrData }) {
   if (!qrData) return null;

@@ -3,8 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2, Edit, CheckCircle, AlertCircle, Clock, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
-import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, getJobStyle, EXPENSE_CATEGORIES, VEHICLE_STATUS_OPTIONS, CONDITIONS, SOURCES, BRANDS, FUEL_TYPES } from "../utils/helpers";
-import { ExpenseModal, JobCardModal, QRLabelModal, inp, sel } from "./VehicleModals";
+import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, EXPENSE_CATEGORIES, VEHICLE_STATUS_OPTIONS, CONDITIONS, SOURCES, BRANDS, FUEL_TYPES } from "../utils/helpers";
+import { ExpenseModal, QRLabelModal, inp, sel } from "./VehicleModals";
 import HoverADDate from "../components/HoverADDate";
 import BSDatePicker from "../components/BSDatePicker";
 import VendorAutocomplete from "../components/VendorAutocomplete";
@@ -34,12 +34,9 @@ export default function VehicleDetail() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [showExpenseModal, setShowExpenseModal] = useState(false);
-  const [showJobModal, setShowJobModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [expForm, setExpForm] = useState({ category: "servicing", amount: "", description: "", date: "" });
-  const [jobForm, setJobForm] = useState({ work_description: "", mechanic_name: "", estimated_cost: "", notes: "" });
   const [editForm, setEditForm] = useState({});
-  const [mechanics, setMechanics] = useState([]);
   const [saving, setSaving] = useState(false);
 
   const fetchVehicle = useCallback(async () => {
@@ -53,7 +50,6 @@ export default function VehicleDetail() {
 
   useEffect(() => {
     fetchVehicle();
-    api.get("/team").then(r => setMechanics(r.data.filter(m => m.role === "mechanic"))).catch(err => console.error("Team load:", err));
   }, [fetchVehicle]);
 
   const addExpense = async (e) => {
@@ -71,18 +67,6 @@ export default function VehicleDetail() {
   const deleteExpense = async (eid) => {
     if (!window.confirm("Delete this expense?")) return;
     try { await api.delete(`/expenses/${eid}`); toast.success("Deleted"); fetchVehicle(); } catch { toast.error("Failed"); }
-  };
-
-  const createJob = async (e) => {
-    e.preventDefault();
-    if (!jobForm.work_description || !jobForm.mechanic_name || !jobForm.estimated_cost) { toast.error("Fill required fields"); return; }
-    setSaving(true);
-    try {
-      await api.post("/jobs", { vehicle_id: id, ...jobForm, estimated_cost: Number(jobForm.estimated_cost) });
-      toast.success("Job card created"); setShowJobModal(false);
-      setJobForm({ work_description: "", mechanic_name: "", estimated_cost: "", notes: "" });
-      fetchVehicle();
-    } catch { toast.error("Failed"); } finally { setSaving(false); }
   };
 
   const updateStatus = async (status) => {
@@ -272,12 +256,11 @@ export default function VehicleDetail() {
       {/* Tabs */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex border-b border-slate-100">
-          {["overview", "expenses", "jobcards"].map(tab => (
+          {["overview", "expenses"].map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} data-testid={`tab-${tab}`}
               className={`px-5 py-3.5 text-sm font-medium capitalize transition-colors ${activeTab === tab ? "border-b-2 border-blue-600 text-blue-600" : "text-slate-500 hover:text-slate-700"}`}>
-              {tab === "jobcards" ? "Job Cards" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
               {tab === "expenses" && vehicle.expenses?.length > 0 && <span className="ml-1.5 bg-slate-100 text-slate-600 text-xs px-1.5 py-0.5 rounded-full">{vehicle.expenses.length}</span>}
-              {tab === "jobcards" && vehicle.job_cards?.length > 0 && <span className="ml-1.5 bg-slate-100 text-slate-600 text-xs px-1.5 py-0.5 rounded-full">{vehicle.job_cards.length}</span>}
             </button>
           ))}
         </div>
@@ -473,45 +456,6 @@ export default function VehicleDetail() {
               )}
             </div>
           )}
-
-          {/* Job Cards Tab */}
-          {activeTab === "jobcards" && (
-            <div className="space-y-3">
-              <div className="flex justify-end">
-                <button onClick={() => setShowJobModal(true)} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all active:scale-95" data-testid="create-job-btn">
-                  <Plus size={14} /> Create Job Card
-                </button>
-              </div>
-              {vehicle.job_cards?.length === 0 ? (
-                <div className="text-center py-8 text-slate-400 text-sm">No job cards yet</div>
-              ) : (
-                <div className="space-y-3">
-                  {vehicle.job_cards?.map(job => {
-                    const js = getJobStyle(job.status);
-                    return (
-                      <div key={job.id} data-testid="job-card-row" className="border border-slate-100 rounded-xl p-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <div>
-                            <div className="text-xs font-mono text-slate-500">{job.job_number}</div>
-                            <div className="font-semibold text-slate-900 text-sm mt-0.5">{job.work_description}</div>
-                          </div>
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${js.bg} ${js.text}`}>{js.label}</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-3 text-xs text-slate-500">
-                          <span>Mechanic: <strong className="text-slate-700">{job.mechanic_name}</strong></span>
-                          <span>Est: <strong className="text-slate-700">{formatNPR(job.estimated_cost)}</strong></span>
-                          <span>Actual: <strong className="text-slate-700">{job.actual_cost ? formatNPR(job.actual_cost) : "—"}</strong></span>
-                        </div>
-                        {job.actual_cost > job.estimated_cost && (
-                          <div className="mt-2 text-xs text-red-600 font-medium flex items-center gap-1"><AlertCircle size={12} /> Budget exceeded by {formatNPR(job.actual_cost - job.estimated_cost)}</div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
 
@@ -596,17 +540,6 @@ export default function VehicleDetail() {
           form={expForm}
           setForm={setExpForm}
           saving={saving}
-        />
-      )}
-
-      {showJobModal && (
-        <JobCardModal
-          onClose={() => setShowJobModal(false)}
-          onSubmit={createJob}
-          form={jobForm}
-          setForm={setJobForm}
-          saving={saving}
-          mechanics={mechanics}
         />
       )}
 
