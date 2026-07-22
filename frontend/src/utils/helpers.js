@@ -66,6 +66,7 @@ export const EXPENSE_CATEGORIES = [
   { value: "parts", label: "Parts Replacement" },
   { value: "labor", label: "Labor Cost" },
   { value: "transport", label: "Transport" },
+  { value: "commissions", label: "Commissions" },
   { value: "other", label: "Other" },
 ];
 
