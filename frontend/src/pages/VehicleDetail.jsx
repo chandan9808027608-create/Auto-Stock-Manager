@@ -368,23 +368,25 @@ export default function VehicleDetail() {
                   )}
                 </div>
               )}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
-                <span className="text-sm text-slate-500 shrink-0">Selling Price</span>
-                {isEditing ? (
-                  <input
-                    data-testid="edit-selling-price-input"
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={editForm.selling_price ?? ""}
-                    onChange={e => setEditForm({ ...editForm, selling_price: e.target.value })}
-                    placeholder="e.g. 185000"
-                    className={`${inp} w-full sm:w-40 sm:text-right`}
-                  />
-                ) : (
-                  <span className="text-sm font-medium text-slate-900 sm:text-right">{vehicle.selling_price ? formatNPR(vehicle.selling_price) : "Not set"}</span>
-                )}
-              </div>
+              {!isPartsOnly && (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
+                  <span className="text-sm text-slate-500 shrink-0">Selling Price</span>
+                  {isEditing ? (
+                    <input
+                      data-testid="edit-selling-price-input"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={editForm.selling_price ?? ""}
+                      onChange={e => setEditForm({ ...editForm, selling_price: e.target.value })}
+                      placeholder="e.g. 185000"
+                      className={`${inp} w-full sm:w-40 sm:text-right`}
+                    />
+                  ) : (
+                    <span className="text-sm font-medium text-slate-900 sm:text-right">{vehicle.selling_price ? formatNPR(vehicle.selling_price) : "Not set"}</span>
+                  )}
+                </div>
+              )}
               {!hideFinancials && (
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
                   <span className="text-sm text-slate-500 shrink-0">Minimum Selling Price</span>

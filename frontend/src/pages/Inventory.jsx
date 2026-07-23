@@ -243,7 +243,7 @@ export default function Inventory() {
             { label: "Total Vehicles", value: filtered.length, icon: Package, color: "bg-blue-500" },
             !hideFinancials && { label: "Total Investment", value: formatNPR(totalInvestment), icon: Wallet, color: "bg-indigo-500" },
             !hideFinancials && { label: "Locked Capital", value: formatNPR(lockedCapital), icon: Lock, color: "bg-purple-500" },
-            { label: "Total Selling Price", value: formatNPR(totalSellingPrice), icon: DollarSign, color: "bg-green-500" },
+            !isPartsOnly && { label: "Total Selling Price", value: formatNPR(totalSellingPrice), icon: DollarSign, color: "bg-green-500" },
           ].filter(Boolean).map(c => (
             <div key={c.label} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3">
               <div className={`w-9 h-9 rounded-lg ${c.color} flex items-center justify-center shrink-0`}>
@@ -293,7 +293,7 @@ export default function Inventory() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-100">
-                  {["Brand & Model", "Year / CC", "Reg Number", "Purchase Source", "Purchase Date", "Age", !hideFinancials && "Investment", "Selling Price", !hideFinancials && "Margin", "Status", ""].filter(Boolean).map(h => (
+                  {["Brand & Model", "Year / CC", "Reg Number", "Purchase Source", "Purchase Date", "Age", !hideFinancials && "Investment", !isPartsOnly && "Selling Price", !hideFinancials && "Margin", "Status", ""].filter(Boolean).map(h => (
                     <th key={h} className="text-left text-xs font-semibold uppercase tracking-wider text-slate-500 px-4 py-3 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -323,7 +323,7 @@ export default function Inventory() {
                         </span>
                       </td>
                       {!hideFinancials && <td className="px-4 py-3 text-sm font-medium text-slate-800 whitespace-nowrap">{formatNPR(v.total_investment)}</td>}
-                      <td className="px-4 py-3 text-sm text-slate-700 whitespace-nowrap">{v.selling_price ? formatNPR(v.selling_price) : "—"}</td>
+                      {!isPartsOnly && <td className="px-4 py-3 text-sm text-slate-700 whitespace-nowrap">{v.selling_price ? formatNPR(v.selling_price) : "—"}</td>}
                       {!hideFinancials && (
                         <td className="px-4 py-3 whitespace-nowrap">
                           {v.profit_margin !== null && v.profit_margin !== undefined ? (

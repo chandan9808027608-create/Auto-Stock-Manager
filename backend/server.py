@@ -152,9 +152,16 @@ FRONT_DESK_HIDDEN_VEHICLE_FIELDS = {
     "low_margin", "accessories_cost", "minimum_selling_price",
 }
 
+# Parts department doesn't handle pricing or sales at all, so on top of the front-desk-hidden
+# fields they also never see the selling price.
+PARTS_HIDDEN_VEHICLE_FIELDS = FRONT_DESK_HIDDEN_VEHICLE_FIELDS | {"selling_price"}
+
 def _hide_financials_for_role(v: dict, role: str) -> dict:
-    if role in ("stock_supervisor", "parts_supervisor"):
+    if role == "stock_supervisor":
         for f in FRONT_DESK_HIDDEN_VEHICLE_FIELDS:
+            v.pop(f, None)
+    elif role == "parts_supervisor":
+        for f in PARTS_HIDDEN_VEHICLE_FIELDS:
             v.pop(f, None)
     return v
 
