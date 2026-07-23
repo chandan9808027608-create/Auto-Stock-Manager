@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Plus, Trash2, Edit, CheckCircle, AlertCircle, Clock, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
-import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, EXPENSE_CATEGORIES, VEHICLE_STATUS_OPTIONS, CONDITIONS, SOURCES, BRANDS, FUEL_TYPES } from "../utils/helpers";
+import { formatNPR, getAgingStyle, getStatusStyle, getDocStyle, EXPENSE_CATEGORIES, VEHICLE_STATUS_OPTIONS, CONDITIONS, SOURCES, BRANDS, FUEL_TYPES, OWNERSHIP_OPTIONS, formatOwnership } from "../utils/helpers";
 import { ExpenseModal, QRLabelModal, inp, sel } from "./VehicleModals";
 import HoverADDate from "../components/HoverADDate";
 import BSDatePicker from "../components/BSDatePicker";
@@ -337,10 +337,10 @@ export default function VehicleDetail() {
                 <span className="text-sm text-slate-500 shrink-0">Ownership</span>
                 {isEditing ? (
                   <select value={editForm.ownership_number || 1} onChange={e => setEditForm({ ...editForm, ownership_number: Number(e.target.value) })} className={`${sel} w-full sm:w-40`}>
-                    {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}{["st", "nd", "rd"][n - 1] || "th"} Owner</option>)}
+                    {OWNERSHIP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 ) : (
-                  <span className="text-sm font-medium text-slate-900 sm:text-right">{vehicle.ownership_number}{["st","nd","rd"][vehicle.ownership_number-1]||"th"} Owner</span>
+                  <span className="text-sm font-medium text-slate-900 sm:text-right">{formatOwnership(vehicle.ownership_number)}</span>
                 )}
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">

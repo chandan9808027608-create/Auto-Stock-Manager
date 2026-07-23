@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Sparkles, TrendingUp, CalendarDays, MessageCircle, Send, Loader2, Copy, Check, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
-import { formatNPR, BRANDS, FUEL_TYPES, CONDITIONS } from "../utils/helpers";
+import { formatNPR, BRANDS, FUEL_TYPES, CONDITIONS, OWNERSHIP_OPTIONS } from "../utils/helpers";
 import { getCurrentBSDate, BS_MONTHS } from "../utils/nepali-date";
 
 // ── Defined outside component ─────────────────────────────────────────
@@ -97,7 +97,7 @@ function PricingTab() {
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Ownership</label>
             <select value={form.ownership_number} onChange={e => setForm({...form, ownership_number: Number(e.target.value)})} className={sel}>
-              {[1,2,3,4].map(n => <option key={n} value={n}>{n}{["st","nd","rd"][n-1]||"th"} Owner</option>)}
+              {OWNERSHIP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
           <div>

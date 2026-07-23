@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Search, Eye, Trash2, Filter, X, UploadCloud, EyeOff, Package, Wallet, DollarSign, Lock } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
-import { formatNPR, getAgingStyle, getStatusStyle, BRANDS, VEHICLE_STATUS_OPTIONS } from "../utils/helpers";
+import { formatNPR, getAgingStyle, getStatusStyle, BRANDS, VEHICLE_STATUS_OPTIONS, formatOwnership } from "../utils/helpers";
 import { AddVehicleModal } from "./AddVehicleModal";
 import HoverADDate from "../components/HoverADDate";
 import { useAuth } from "../context/AuthContext";
@@ -303,7 +303,7 @@ export default function Inventory() {
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="min-w-0">
                     <div className="font-bold text-slate-900 text-sm truncate" style={{ fontFamily: "Manrope" }}>{v.brand} {v.model}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">{v.year} · {v.engine_cc}cc · {v.fuel_type} · {v.ownership_number}{["st","nd","rd"][v.ownership_number-1]||"th"} owner</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{v.year} · {v.engine_cc}cc · {v.fuel_type} · {formatOwnership(v.ownership_number)}</div>
                     {v.registration_number && <div className="text-xs font-mono text-slate-500 mt-0.5">{v.registration_number}</div>}
                   </div>
                   <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${st.bg} ${st.text}`}>{st.label}</span>

@@ -4,7 +4,7 @@
 import { Plus } from "lucide-react";
 import BSDatePicker from "../components/BSDatePicker";
 import VendorAutocomplete from "../components/VendorAutocomplete";
-import { BRANDS, SOURCES, CONDITIONS, FUEL_TYPES, VEHICLE_STATUS_OPTIONS } from "../utils/helpers";
+import { BRANDS, SOURCES, CONDITIONS, FUEL_TYPES, VEHICLE_STATUS_OPTIONS, OWNERSHIP_OPTIONS } from "../utils/helpers";
 
 // text-base (16px) on mobile stops iOS Safari auto-zooming the page on focus; h-10 gives a comfortable touch target
 const inp = "w-full h-10 sm:h-9 px-3 text-base sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
@@ -89,7 +89,7 @@ export function AddVehicleModal({ form, setForm, onClose, onSubmit, saving, phot
             </Field>
             <Field label="Ownership Number">
               <select value={form.ownership_number} onChange={e => setForm({ ...form, ownership_number: Number(e.target.value) })} className={sel}>
-                {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}{["st", "nd", "rd"][n - 1] || "th"} Owner</option>)}
+                {OWNERSHIP_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </Field>
             <Field label="Purchase Price (NPR)" required>

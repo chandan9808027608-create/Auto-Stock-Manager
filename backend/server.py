@@ -330,9 +330,13 @@ async def ai_price_suggestion(req: AIPriceRequest, cu: dict = Depends(admin_only
         "for the vehicle described, reasoning from the sold-history comparables given and the general Nepal used-bike market. "
         f"{MARKDOWN_NOTE}"
     )
+    # ownership_number == 99 is a sentinel (not a real owner count): bluebook lost/damaged,
+    # running on a transcript copy pending renewal — mirrors TRANSCRIPT_OWNERSHIP in helpers.js.
+    ownership_desc = "on a transcript bluebook (original lost/damaged, renewal pending)" if v.ownership_number == 99 \
+        else f"{v.ownership_number}{'st' if v.ownership_number == 1 else 'th'} owner"
     prompt = (
         f"Vehicle to price: {v.brand} {v.model} {v.year}, {v.engine_cc or '?'}cc {v.fuel_type}, "
-        f"{v.ownership_number}{'st' if v.ownership_number == 1 else 'th'} owner, {v.kilometer_run or '?'}km, "
+        f"{ownership_desc}, {v.kilometer_run or '?'}km, "
         f"condition: {v.condition}, purchase price: Rs. {v.purchase_price or 'unknown'}.\n\n"
         f"Similar sold vehicles from this dealership's history:\n{history_lines}\n\n"
         "Give a recommended selling price range and a brief justification."
