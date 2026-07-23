@@ -9,6 +9,7 @@ import HoverADDate from "../components/HoverADDate";
 import BSDatePicker from "../components/BSDatePicker";
 import VendorAutocomplete from "../components/VendorAutocomplete";
 import { useAuth } from "../context/AuthContext";
+import { hasFullVehicleAccess, PARTS_ALLOWED_VEHICLE_STATUSES } from "../utils/permissions";
 
 const DocCard = ({ label, status }) => {
   const s = getDocStyle(status);
@@ -30,6 +31,9 @@ export default function VehicleDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isFrontDesk = user?.role === "stock_supervisor";
+  const isPartsOnly = user?.role === "parts_supervisor";
+  const hideFinancials = isFrontDesk || isPartsOnly;
+  const canManageStock = hasFullVehicleAccess(user?.role);
   const [vehicle, setVehicle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
@@ -71,12 +75,10 @@ export default function VehicleDetail() {
 
   const updateStatus = async (status) => {
     try {
-      const upd = { status };
-      if (status === "sold") upd.sold_date = new Date().toISOString().slice(0, 10);
-      await api.put(`/vehicles/${id}`, upd);
+      await api.patch(`/vehicles/${id}/status`, { status });
       toast.success(`Status updated to ${status}`);
       fetchVehicle();
-    } catch { toast.error("Failed"); }
+    } catch (err) { toast.error(err.response?.data?.detail || "Failed"); }
   };
 
   const saveEdit = async (e) => {
@@ -156,7 +158,7 @@ export default function VehicleDetail() {
 
   const financialCards = useMemo(() => {
     if (!vehicle) return [];
-    if (isFrontDesk) {
+    if (hideFinancials) {
       return [{ label: "Total Expenses", value: formatNPR(vehicle.total_expenses), bold: false, highlight: false }];
     }
     return [
@@ -170,7 +172,7 @@ export default function VehicleDetail() {
         highlight: vehicle.profit_margin !== null,
       },
     ];
-  }, [vehicle, isFrontDesk]);
+  }, [vehicle, hideFinancials]);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full" /></div>;
   if (!vehicle) return null;
@@ -213,14 +215,15 @@ export default function VehicleDetail() {
           <select
             value={vehicle.status}
             onChange={e => updateStatus(e.target.value)}
-            className={`appearance-none cursor-pointer px-2.5 py-1 pr-6 rounded-full text-xs font-semibold uppercase tracking-wide border-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 ${st.bg} ${st.text}`}
+            disabled={!canManageStock && !PARTS_ALLOWED_VEHICLE_STATUSES.includes(vehicle.status)}
+            className={`appearance-none cursor-pointer px-2.5 py-1 pr-6 rounded-full text-xs font-semibold uppercase tracking-wide border-none focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-70 ${st.bg} ${st.text}`}
             style={{ backgroundImage: "none" }}
             data-testid="vehicle-status-select"
-            title="Change vehicle status"
+            title={canManageStock ? "Change vehicle status" : "Parts department can move a vehicle between Available, In Repair, and Scrap"}
           >
-            {VEHICLE_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {(canManageStock ? VEHICLE_STATUS_OPTIONS : VEHICLE_STATUS_OPTIONS.filter(o => PARTS_ALLOWED_VEHICLE_STATUSES.includes(o.value))).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          {isEditing ? (
+          {canManageStock && (isEditing ? (
             <>
               <button type="button" onClick={cancelEdit} className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">Cancel</button>
               <button type="button" onClick={saveEdit} disabled={saving} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 transition-colors" data-testid="save-vehicle-btn">
@@ -229,7 +232,7 @@ export default function VehicleDetail() {
             </>
           ) : (
             <button onClick={() => { setIsEditing(true); setActiveTab("overview"); }} className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors" data-testid="edit-vehicle-btn"><Edit size={14} /> Edit</button>
-          )}
+          ))}
           <button onClick={loadQR} className="flex items-center gap-1.5 px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors" data-testid="qr-btn"><QrCode size={14} /> QR Label</button>
         </div>
       </div>
@@ -346,7 +349,7 @@ export default function VehicleDetail() {
                   <span className="text-sm font-medium text-slate-900 sm:text-right"><HoverADDate date={vehicle.purchase_date} /></span>
                 )}
               </div>
-              {!isFrontDesk && (
+              {!hideFinancials && (
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
                   <span className="text-sm text-slate-500 shrink-0">Purchase Price</span>
                   {isEditing ? (
@@ -382,7 +385,7 @@ export default function VehicleDetail() {
                   <span className="text-sm font-medium text-slate-900 sm:text-right">{vehicle.selling_price ? formatNPR(vehicle.selling_price) : "Not set"}</span>
                 )}
               </div>
-              {!isFrontDesk && (
+              {!hideFinancials && (
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 py-2 border-b border-slate-50">
                   <span className="text-sm text-slate-500 shrink-0">Minimum Selling Price</span>
                   {isEditing ? (
@@ -429,9 +432,11 @@ export default function VehicleDetail() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-500">Total: <strong className="text-slate-900">{formatNPR(vehicle.total_expenses)}</strong></span>
-                <button onClick={() => setShowExpenseModal(true)} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all active:scale-95" data-testid="add-expense-btn">
-                  <Plus size={14} /> Add Expense
-                </button>
+                {canManageStock && (
+                  <button onClick={() => setShowExpenseModal(true)} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-all active:scale-95" data-testid="add-expense-btn">
+                    <Plus size={14} /> Add Expense
+                  </button>
+                )}
               </div>
               {vehicle.expenses?.length === 0 ? (
                 <div className="text-center py-8 text-slate-400 text-sm">No expenses recorded yet</div>
@@ -447,7 +452,9 @@ export default function VehicleDetail() {
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="font-semibold text-slate-900">{formatNPR(exp.amount)}</span>
-                          <button onClick={() => deleteExpense(exp.id)} className="text-red-400 hover:text-red-600 transition-colors"><Trash2 size={14} /></button>
+                          {canManageStock && (
+                            <button onClick={() => deleteExpense(exp.id)} className="text-red-400 hover:text-red-600 transition-colors"><Trash2 size={14} /></button>
+                          )}
                         </div>
                       </div>
                     );
@@ -463,31 +470,37 @@ export default function VehicleDetail() {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5" data-testid="photos-section">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-bold text-slate-900" style={{ fontFamily: "Manrope" }}>Vehicle Photos</h2>
-          <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${uploadingPhoto ? "bg-slate-200 text-slate-500" : "bg-blue-600 hover:bg-blue-700 text-white"}`} data-testid="upload-photo-btn">
-            {uploadingPhoto ? "Uploading..." : "+ Add Photo"}
-            <input type="file" accept="image/*" className="hidden" disabled={uploadingPhoto} onChange={e => { if (e.target.files[0]) uploadPhoto(e.target.files[0]); e.target.value = ""; }} />
-          </label>
+          {canManageStock && (
+            <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${uploadingPhoto ? "bg-slate-200 text-slate-500" : "bg-blue-600 hover:bg-blue-700 text-white"}`} data-testid="upload-photo-btn">
+              {uploadingPhoto ? "Uploading..." : "+ Add Photo"}
+              <input type="file" accept="image/*" className="hidden" disabled={uploadingPhoto} onChange={e => { if (e.target.files[0]) uploadPhoto(e.target.files[0]); e.target.value = ""; }} />
+            </label>
+          )}
         </div>
         {photos.length === 0 ? (
           <div className="border-2 border-dashed border-slate-200 rounded-xl h-32 flex flex-col items-center justify-center text-slate-400">
             <p className="text-sm font-medium">No photos yet</p>
-            <p className="text-xs mt-0.5">Click &quot;+ Add Photo&quot; to upload</p>
+            {canManageStock && <p className="text-xs mt-0.5">Click &quot;+ Add Photo&quot; to upload</p>}
           </div>
         ) : (
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
             {photos.map(photo => (
               <div key={photo.id} className="relative group rounded-xl overflow-hidden aspect-square bg-slate-100" data-testid="vehicle-photo">
                 <img src={photo.url} alt="Vehicle" className="w-full h-full object-cover" />
-                <button onClick={() => deletePhoto(photo.id)} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold" data-testid="delete-photo-btn">
-                  Delete
-                </button>
+                {canManageStock && (
+                  <button onClick={() => deletePhoto(photo.id)} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold" data-testid="delete-photo-btn">
+                    Delete
+                  </button>
+                )}
               </div>
             ))}
+            {canManageStock && (
             <label className="border-2 border-dashed border-slate-200 rounded-xl aspect-square flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-blue-400 hover:text-blue-500 transition-colors">
               <Plus size={20} />
               <span className="text-xs mt-1">Add</span>
               <input type="file" accept="image/*" className="hidden" onChange={e => { if (e.target.files[0]) uploadPhoto(e.target.files[0]); e.target.value = ""; }} />
             </label>
+            )}
           </div>
         )}
       </div>
@@ -502,14 +515,18 @@ export default function VehicleDetail() {
             return (
               <div key={key} className="border border-slate-100 rounded-xl p-3">
                 <DocCard label={label} status={status} />
-                <label className={`mt-2 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors w-full ${uploadingDoc ? "bg-slate-100 text-slate-400" : "bg-blue-50 hover:bg-blue-100 text-blue-700"}`} data-testid={`upload-doc-${key}-btn`}>
-                  + Upload
-                  <input type="file" accept="image/*,.pdf" className="hidden" disabled={uploadingDoc} onChange={e => { if (e.target.files[0]) uploadDoc(e.target.files[0], key); e.target.value = ""; }} />
-                </label>
+                {canManageStock && (
+                  <label className={`mt-2 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors w-full ${uploadingDoc ? "bg-slate-100 text-slate-400" : "bg-blue-50 hover:bg-blue-100 text-blue-700"}`} data-testid={`upload-doc-${key}-btn`}>
+                    + Upload
+                    <input type="file" accept="image/*,.pdf" className="hidden" disabled={uploadingDoc} onChange={e => { if (e.target.files[0]) uploadDoc(e.target.files[0], key); e.target.value = ""; }} />
+                  </label>
+                )}
                 {docs.map(doc => (
                   <div key={doc.id} className="mt-1.5 flex items-center justify-between bg-slate-50 rounded-lg px-2 py-1" data-testid="uploaded-doc">
                     <a href={doc.url} download={doc.original_name} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline truncate max-w-[80px]">{doc.original_name}</a>
-                    <button onClick={() => deleteDoc(doc.id)} className="text-red-400 hover:text-red-600 ml-1 flex-shrink-0" title="Delete"><Trash2 size={11} /></button>
+                    {canManageStock && (
+                      <button onClick={() => deleteDoc(doc.id)} className="text-red-400 hover:text-red-600 ml-1 flex-shrink-0" title="Delete"><Trash2 size={11} /></button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -524,7 +541,9 @@ export default function VehicleDetail() {
               {legalDocs.filter(d => d.doc_type === "other").map(doc => (
                 <div key={doc.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2" data-testid="uploaded-doc-other">
                   <a href={doc.url} download={doc.original_name} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline truncate">{doc.original_name}</a>
-                  <button onClick={() => deleteDoc(doc.id)} className="text-red-400 hover:text-red-600 ml-2 flex-shrink-0"><Trash2 size={13} /></button>
+                  {canManageStock && (
+                    <button onClick={() => deleteDoc(doc.id)} className="text-red-400 hover:text-red-600 ml-2 flex-shrink-0"><Trash2 size={13} /></button>
+                  )}
                 </div>
               ))}
             </div>

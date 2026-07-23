@@ -2,7 +2,9 @@
 // always has full access; other roles only see what's listed here.
 export const ROLE_NAV_PATHS = {
   stock_supervisor: ["/inventory", "/sales", "/jobs", "/customers", "/team", "/settings"],
-  parts_supervisor: ["/spare-parts", "/jobs", "/team", "/settings"],
+  // Parts department gets read-only inventory browsing plus the ability to flip a vehicle's
+  // pipeline status (Available <-> In Repair, or Scrap) — see PARTS_ALLOWED_STATUSES in server.py.
+  parts_supervisor: ["/spare-parts", "/jobs", "/inventory", "/team", "/settings"],
 };
 
 export const ROLE_DEFAULT_PATH = {
@@ -23,4 +25,12 @@ export function canEditJobs(role) {
 
 export function canDeleteJobs(role) {
   return !role || role === "admin" || role === "parts_supervisor";
+}
+
+// Parts department has partial inventory access: browse + change pipeline status only.
+// Mirrors PARTS_ALLOWED_STATUSES in server.py — keep in sync.
+export const PARTS_ALLOWED_VEHICLE_STATUSES = ["available", "in_repair", "scrap"];
+
+export function hasFullVehicleAccess(role) {
+  return !role || role === "admin" || role === "stock_supervisor";
 }

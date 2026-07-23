@@ -12,6 +12,14 @@ import { canEditJobs, canDeleteJobs } from "../utils/permissions";
 const STATUSES = ["all", "pending", "in_progress", "completed"];
 const EMPTY_FORM = { vehicle_id: "", work_description: "", mechanic_id: "", mechanic_name: "", estimated_cost: "", notes: "", coupon_no: "", job_date: "" };
 
+function getErrMsg(err) {
+  if (!err.response) return "Network error - could not reach the server";
+  const detail = err.response.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) return detail.map((d) => d.msg || JSON.stringify(d)).join(", ");
+  return `Server error (${err.response.status})`;
+}
+
 export default function JobCards() {
   const { user } = useAuth();
   const canEdit = canEditJobs(user?.role);
@@ -138,7 +146,7 @@ export default function JobCards() {
         closeModal();
         fetchJobs();
         api.get("/spare-parts").then(r => setSpareParts(r.data)).catch(() => {});
-      } catch (err) { toast.error(err.response?.data?.detail || "Failed"); }
+      } catch (err) { toast.error(getErrMsg(err)); }
       finally { setSaving(false); }
       return;
     }
@@ -156,7 +164,7 @@ export default function JobCards() {
       fetchJobs();
       // Refresh spare parts quantities after deduction
       api.get("/spare-parts").then(r => setSpareParts(r.data)).catch(() => {});
-    } catch (err) { toast.error(err.response?.data?.detail || "Failed"); }
+    } catch (err) { toast.error(getErrMsg(err)); }
     finally { setSaving(false); }
   };
 
@@ -168,12 +176,12 @@ export default function JobCards() {
       await api.put(`/jobs/${jobId}`, upd);
       toast.success("Status updated");
       fetchJobs();
-    } catch { toast.error("Failed"); } finally { setUpdating(null); }
+    } catch (err) { toast.error(getErrMsg(err)); } finally { setUpdating(null); }
   };
 
   const deleteJob = async (jobId) => {
     if (!window.confirm("Delete this job card?")) return;
-    try { await api.delete(`/jobs/${jobId}`); toast.success("Deleted"); fetchJobs(); } catch { toast.error("Failed"); }
+    try { await api.delete(`/jobs/${jobId}`); toast.success("Deleted"); fetchJobs(); } catch (err) { toast.error(getErrMsg(err)); }
   };
 
   const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";

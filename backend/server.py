@@ -95,11 +95,18 @@ ROLE_PERMISSIONS = {
     "parts_supervisor": {  # Parts department
         "spare_parts": {"view", "create", "edit", "delete"},
         "jobs": {"view", "create", "edit", "delete"},
-        "vehicles": {"view"},  # read-only, needed to pick a vehicle when creating a job card
+        "vehicles": {"view", "edit_status"},  # read-only vehicle data, plus limited pipeline-status changes (see PARTS_ALLOWED_STATUSES)
+        "vehicle_media": {"view"},  # read-only, so opening a vehicle's detail page doesn't 403 loading photos/documents
         "vendor_lookup": {"view", "create"},  # supplier picker + inline "add new vendor" on a part
         "team": {"view", "create", "edit", "delete"},
     },
 }
+
+# parts_supervisor's "edit_status" permission is intentionally narrower than full vehicle "edit":
+# they can only move a vehicle between Available / In Repair (job cards require In Repair, see
+# POST /jobs) and mark it Scrap. Sold/Reserved/Unlisted and all other vehicle fields stay
+# restricted to admin / stock_supervisor.
+PARTS_ALLOWED_STATUSES = {"available", "in_repair", "scrap"}
 
 def require(resource: str, action: str):
     async def _checker(cu: dict = Depends(get_current_user)):
@@ -107,6 +114,16 @@ def require(resource: str, action: str):
         if role == "admin":
             return cu
         if action in ROLE_PERMISSIONS.get(role, {}).get(resource, set()):
+            return cu
+        raise HTTPException(403, "You do not have permission to perform this action")
+    return _checker
+
+def require_any(resource: str, actions: set):
+    async def _checker(cu: dict = Depends(get_current_user)):
+        role = cu.get("role", "admin")
+        if role == "admin":
+            return cu
+        if ROLE_PERMISSIONS.get(role, {}).get(resource, set()) & actions:
             return cu
         raise HTTPException(403, "You do not have permission to perform this action")
     return _checker
@@ -136,7 +153,7 @@ FRONT_DESK_HIDDEN_VEHICLE_FIELDS = {
 }
 
 def _hide_financials_for_role(v: dict, role: str) -> dict:
-    if role == "stock_supervisor":
+    if role in ("stock_supervisor", "parts_supervisor"):
         for f in FRONT_DESK_HIDDEN_VEHICLE_FIELDS:
             v.pop(f, None)
     return v
@@ -412,6 +429,9 @@ class VehicleUpdate(BaseModel):
     discount: Optional[float] = None
     bluebook_status: Optional[str] = None; insurance_status: Optional[str] = None
     tax_clearance_status: Optional[str] = None; transfer_status: Optional[str] = None
+
+class VehicleStatusUpdate(BaseModel):
+    status: str
 
 class ExpenseCreate(BaseModel):
     vehicle_id: str; category: str; amount: float
@@ -935,6 +955,68 @@ async def update_vehicle(vid: str, vehicle: VehicleUpdate, cu: dict = Depends(re
         "user": cu["username"], "timestamp": datetime.now(timezone.utc).isoformat(),
         "details": f"Updated fields: {list(upd.keys())}"})
     return await db.vehicles.find_one({"id": vid}, {"_id": 0})
+
+VEHICLE_STATUSES = {"available", "reserved", "sold", "unlisted", "scrap", "in_repair"}
+
+# Status-only update, separate from the full PUT /vehicles/{vid} above: this is what lets
+# parts_supervisor (edit_status only, not full edit — see ROLE_PERMISSIONS) move a vehicle
+# through the repair pipeline without exposing the rest of the vehicle record to editing.
+@api_router.patch("/vehicles/{vid}/status")
+async def update_vehicle_status(vid: str, body: VehicleStatusUpdate, cu: dict = Depends(require_any("vehicles", {"edit", "edit_status"}))):
+    if body.status not in VEHICLE_STATUSES:
+        raise HTTPException(400, f"Invalid status '{body.status}'")
+
+    role = cu.get("role", "admin")
+    has_full_edit = role == "admin" or "edit" in ROLE_PERMISSIONS.get(role, {}).get("vehicles", set())
+
+    existing = await db.vehicles.find_one({"id": vid}, {"_id": 0})
+    if not existing: raise HTTPException(404, "Vehicle not found")
+
+    if not has_full_edit:
+        # Scoped-access roles (e.g. parts_supervisor) may only move a vehicle between the
+        # statuses their permission covers — never touch Sold/Reserved/Unlisted vehicles.
+        if existing.get("status") not in PARTS_ALLOWED_STATUSES or body.status not in PARTS_ALLOWED_STATUSES:
+            raise HTTPException(403, "You do not have permission to set this vehicle status")
+
+    upd = {"status": body.status, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if body.status == "sold":
+        upd["sold_date"] = datetime.now(timezone.utc).date().isoformat()
+
+    became_sold = body.status == "sold" and existing.get("status") != "sold"
+    sale_price = existing.get("selling_price") or existing.get("purchase_price", 0)
+    if became_sold and not existing.get("selling_price"):
+        upd["selling_price"] = sale_price
+
+    r = await db.vehicles.update_one({"id": vid}, {"$set": upd})
+    if r.matched_count == 0: raise HTTPException(404, "Vehicle not found")
+
+    if became_sold and not await db.sales.find_one({"vehicle_id": vid}):
+        await db.sales.insert_one({
+            "id": str(uuid.uuid4()),
+            "vehicle_id": vid,
+            "customer_id": existing.get("customer_id"),
+            "sale_price": sale_price,
+            "extra_expenses": [],
+            "expenses_total": 0,
+            "total_amount": sale_price,
+            "payment_method": "Due",
+            "paid_cash": 0,
+            "paid_bank": 0,
+            "due_amount": sale_price,
+            "due_date": None,
+            "payment_status": "Unpaid",
+            "payment_history": [],
+            "sale_date": upd["sold_date"],
+            "notes": "Auto-created: vehicle marked Sold directly from Inventory",
+            "created_by": cu.get("username"),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    await db.audit_logs.insert_one({"action": "vehicle_status_updated", "vehicle_id": vid,
+        "user": cu["username"], "timestamp": datetime.now(timezone.utc).isoformat(),
+        "details": f"Status changed from {existing.get('status')} to {body.status}"})
+    v = await db.vehicles.find_one({"id": vid}, {"_id": 0})
+    return _hide_financials_for_role(v, role)
 
 @api_router.delete("/vehicles/{vid}")
 async def delete_vehicle(vid: str, cu: dict = Depends(admin_only)):

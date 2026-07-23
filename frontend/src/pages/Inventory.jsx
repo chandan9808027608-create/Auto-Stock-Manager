@@ -7,6 +7,7 @@ import { formatNPR, getAgingStyle, getStatusStyle, BRANDS, VEHICLE_STATUS_OPTION
 import { AddVehicleModal } from "./AddVehicleModal";
 import HoverADDate from "../components/HoverADDate";
 import { useAuth } from "../context/AuthContext";
+import { hasFullVehicleAccess } from "../utils/permissions";
 
 const STATUSES = ["all", ...VEHICLE_STATUS_OPTIONS.map(o => o.value)];
 const AGING_CATEGORIES = ["all", "fresh", "normal", "slow", "dead"];
@@ -24,6 +25,9 @@ export default function Inventory() {
   const { user } = useAuth();
   const isAdmin = !user?.role || user.role === "admin";
   const isFrontDesk = user?.role === "stock_supervisor";
+  const isPartsOnly = user?.role === "parts_supervisor";
+  const hideFinancials = isFrontDesk || isPartsOnly;
+  const canManageStock = hasFullVehicleAccess(user?.role);
   const [searchParams, setSearchParams] = useSearchParams();
   const [vehicles, setVehicles] = useState([]);
   const [filtered, setFiltered] = useState([]);
@@ -144,7 +148,7 @@ export default function Inventory() {
           <p className="text-sm text-slate-500">{filtered.length} vehicles found</p>
         </div>
         <div className="flex items-center gap-2">
-          {unpricedVisible.length > 0 && (
+          {canManageStock && unpricedVisible.length > 0 && (
             <button
               onClick={hideUnpriced}
               disabled={hidingUnpriced}
@@ -154,13 +158,15 @@ export default function Inventory() {
               <EyeOff size={16} /> {hidingUnpriced ? "Moving..." : `Move ${unpricedVisible.length} With No Price To Unlisted`}
             </button>
           )}
-          <button
-            onClick={() => { setForm(EMPTY); setShowModal(true); }}
-            data-testid="add-vehicle-button"
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-all active:scale-95 shadow-sm"
-          >
-            <Plus size={16} /> Add Vehicle
-          </button>
+          {canManageStock && (
+            <button
+              onClick={() => { setForm(EMPTY); setShowModal(true); }}
+              data-testid="add-vehicle-button"
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-all active:scale-95 shadow-sm"
+            >
+              <Plus size={16} /> Add Vehicle
+            </button>
+          )}
         </div>
       </div>
 
@@ -235,8 +241,8 @@ export default function Inventory() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: "Total Vehicles", value: filtered.length, icon: Package, color: "bg-blue-500" },
-            !isFrontDesk && { label: "Total Investment", value: formatNPR(totalInvestment), icon: Wallet, color: "bg-indigo-500" },
-            !isFrontDesk && { label: "Locked Capital", value: formatNPR(lockedCapital), icon: Lock, color: "bg-purple-500" },
+            !hideFinancials && { label: "Total Investment", value: formatNPR(totalInvestment), icon: Wallet, color: "bg-indigo-500" },
+            !hideFinancials && { label: "Locked Capital", value: formatNPR(lockedCapital), icon: Lock, color: "bg-purple-500" },
             { label: "Total Selling Price", value: formatNPR(totalSellingPrice), icon: DollarSign, color: "bg-green-500" },
           ].filter(Boolean).map(c => (
             <div key={c.label} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3">
@@ -287,7 +293,7 @@ export default function Inventory() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-100">
-                  {["Brand & Model", "Year / CC", "Reg Number", "Purchase Source", "Purchase Date", "Age", !isFrontDesk && "Investment", "Selling Price", !isFrontDesk && "Margin", "Status", ""].filter(Boolean).map(h => (
+                  {["Brand & Model", "Year / CC", "Reg Number", "Purchase Source", "Purchase Date", "Age", !hideFinancials && "Investment", "Selling Price", !hideFinancials && "Margin", "Status", ""].filter(Boolean).map(h => (
                     <th key={h} className="text-left text-xs font-semibold uppercase tracking-wider text-slate-500 px-4 py-3 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -316,9 +322,9 @@ export default function Inventory() {
                           {v.aging?.days}d · {ag.label}
                         </span>
                       </td>
-                      {!isFrontDesk && <td className="px-4 py-3 text-sm font-medium text-slate-800 whitespace-nowrap">{formatNPR(v.total_investment)}</td>}
+                      {!hideFinancials && <td className="px-4 py-3 text-sm font-medium text-slate-800 whitespace-nowrap">{formatNPR(v.total_investment)}</td>}
                       <td className="px-4 py-3 text-sm text-slate-700 whitespace-nowrap">{v.selling_price ? formatNPR(v.selling_price) : "—"}</td>
-                      {!isFrontDesk && (
+                      {!hideFinancials && (
                         <td className="px-4 py-3 whitespace-nowrap">
                           {v.profit_margin !== null && v.profit_margin !== undefined ? (
                             <span className={`text-sm font-semibold ${v.low_margin ? "text-red-600" : "text-green-600"}`}>{v.profit_margin}%</span>

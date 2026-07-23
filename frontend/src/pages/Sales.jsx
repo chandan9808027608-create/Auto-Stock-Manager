@@ -19,6 +19,14 @@ const PRESET_EXPENSES = [
 const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
 const sel = `${inp} bg-white`;
 
+function getErrMsg(err, fallback) {
+  if (!err.response) return "Network error - could not reach the server";
+  const detail = err.response.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) return detail.map((d) => d.msg || JSON.stringify(d)).join(", ");
+  return fallback || `Server error (${err.response.status})`;
+}
+
 const Field = ({ label, required, children }) => (
   <div>
     <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -185,7 +193,7 @@ export default function Sales() {
       setShowModal(false);
       setEditingId(null);
       fetchAll();
-    } catch (err) { toast.error(err.response?.data?.detail || "Failed to save sale"); }
+    } catch (err) { toast.error(getErrMsg(err, "Failed to save sale")); }
     finally { setSaving(false); }
   };
 
@@ -195,7 +203,7 @@ export default function Sales() {
       await api.delete(`/sales/${id}`);
       toast.success("Sale deleted, vehicle restored");
       fetchAll();
-    } catch { toast.error("Failed to delete"); }
+    } catch (err) { toast.error(getErrMsg(err, "Failed to delete")); }
   };
 
   const openPayModal = (sale) => { setPayModal(sale); setPayAmount(""); setPayMethod("Cash"); };
@@ -208,7 +216,7 @@ export default function Sales() {
       toast.success("Payment recorded!");
       setPayModal(null);
       fetchAll();
-    } catch (err) { toast.error(err.response?.data?.detail || "Failed to record payment"); }
+    } catch (err) { toast.error(getErrMsg(err, "Failed to record payment")); }
     finally { setPayingSaving(false); }
   };
 
