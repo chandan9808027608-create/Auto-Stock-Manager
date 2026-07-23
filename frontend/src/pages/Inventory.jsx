@@ -258,110 +258,113 @@ export default function Inventory() {
         </div>
       )}
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center h-48">
-            <div className="animate-spin w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full" />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-slate-500" data-testid="empty-state">
-            <p className="font-medium">
-              {agingFilter !== "all"
-                ? `No ${getAgingStyle(agingFilter).label.toLowerCase()} (${AGING_RANGES[agingFilter]}) vehicles found`
-                : "No vehicles found"}
-            </p>
-            <p className="text-sm mt-1">
-              {agingFilter !== "all"
-                ? "No vehicles fall into this stock age range right now."
-                : search || statusFilter !== "all" || brandFilter !== "all"
-                  ? "Try adjusting your filters"
-                  : "Add your first vehicle to get started"}
-            </p>
-            {agingFilter !== "all" && (
-              <button
-                onClick={() => { setAgingFilter("all"); setSearchParams({}); }}
-                className="mt-3 text-sm text-blue-600 hover:underline"
-                data-testid="empty-clear-filter"
+      {/* Vehicle Cards */}
+      {loading ? (
+        <div className="flex items-center justify-center h-48">
+          <div className="animate-spin w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center h-48 text-slate-500" data-testid="empty-state">
+          <p className="font-medium">
+            {agingFilter !== "all"
+              ? `No ${getAgingStyle(agingFilter).label.toLowerCase()} (${AGING_RANGES[agingFilter]}) vehicles found`
+              : "No vehicles found"}
+          </p>
+          <p className="text-sm mt-1">
+            {agingFilter !== "all"
+              ? "No vehicles fall into this stock age range right now."
+              : search || statusFilter !== "all" || brandFilter !== "all"
+                ? "Try adjusting your filters"
+                : "Add your first vehicle to get started"}
+          </p>
+          {agingFilter !== "all" && (
+            <button
+              onClick={() => { setAgingFilter("all"); setSearchParams({}); }}
+              className="mt-3 text-sm text-blue-600 hover:underline"
+              data-testid="empty-clear-filter"
+            >
+              View all vehicles
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map(v => {
+            const ag = getAgingStyle(v.aging?.category);
+            const st = getStatusStyle(v.status);
+            const showFinRow = !hideFinancials || !isPartsOnly;
+            return (
+              <div
+                key={v.id}
+                data-testid="vehicle-row"
+                onClick={() => navigate(`/inventory/${v.id}`)}
+                className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-shadow cursor-pointer"
               >
-                View all vehicles
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  {["Brand & Model", "Year / CC", "Reg Number", "Purchase Source", "Purchase Date", "Age", !hideFinancials && "Investment", !isPartsOnly && "Selling Price", !hideFinancials && "Margin", "Status", ""].filter(Boolean).map(h => (
-                    <th key={h} className="text-left text-xs font-semibold uppercase tracking-wider text-slate-500 px-4 py-3 whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {filtered.map(v => {
-                  const ag = getAgingStyle(v.aging?.category);
-                  const st = getStatusStyle(v.status);
-                  return (
-                    <tr
-                      key={v.id}
-                      data-testid="vehicle-row"
-                      onClick={() => navigate(`/inventory/${v.id}`)}
-                      className="table-row-hover cursor-pointer transition-colors"
-                    >
-                      <td className="px-4 py-3">
-                        <div className="font-semibold text-slate-900 text-sm">{v.brand} {v.model}</div>
-                        <div className="text-xs text-slate-500">{v.fuel_type} · {v.ownership_number}{["st","nd","rd"][v.ownership_number-1]||"th"} owner</div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-700 whitespace-nowrap">{v.year} · {v.engine_cc}cc</td>
-                      <td className="px-4 py-3 text-sm font-mono text-slate-600">{v.registration_number || "—"}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">{v.purchase_source || "—"}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap"><HoverADDate date={v.purchase_date} /></td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${ag.bg} ${ag.text}`}>
-                          {v.aging?.days}d · {ag.label}
-                        </span>
-                      </td>
-                      {!hideFinancials && <td className="px-4 py-3 text-sm font-medium text-slate-800 whitespace-nowrap">{formatNPR(v.total_investment)}</td>}
-                      {!isPartsOnly && <td className="px-4 py-3 text-sm text-slate-700 whitespace-nowrap">{v.selling_price ? formatNPR(v.selling_price) : "—"}</td>}
-                      {!hideFinancials && (
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {v.profit_margin !== null && v.profit_margin !== undefined ? (
-                            <span className={`text-sm font-semibold ${v.low_margin ? "text-red-600" : "text-green-600"}`}>{v.profit_margin}%</span>
-                          ) : "—"}
-                        </td>
-                      )}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${st.bg} ${st.text}`}>{st.label}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={e => { e.stopPropagation(); navigate(`/inventory/${v.id}`); }}
-                            className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
-                            data-testid="view-vehicle-btn"
-                          >
-                            <Eye size={15} className="text-slate-500" />
-                          </button>
-                          {isAdmin && (
-                            <button
-                              onClick={e => handleDelete(v.id, e)}
-                              className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"
-                              data-testid="delete-vehicle-btn"
-                            >
-                              <Trash2 size={15} className="text-red-400" />
-                            </button>
-                          )}
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="min-w-0">
+                    <div className="font-bold text-slate-900 text-sm truncate" style={{ fontFamily: "Manrope" }}>{v.brand} {v.model}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{v.year} · {v.engine_cc}cc · {v.fuel_type} · {v.ownership_number}{["st","nd","rd"][v.ownership_number-1]||"th"} owner</div>
+                    {v.registration_number && <div className="text-xs font-mono text-slate-500 mt-0.5">{v.registration_number}</div>}
+                  </div>
+                  <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${st.bg} ${st.text}`}>{st.label}</span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-500 mb-3">
+                  <span className="truncate">Source: <span className="font-medium text-slate-700">{v.purchase_source || "—"}</span></span>
+                  <span className={`shrink-0 ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${ag.bg} ${ag.text}`}>
+                    {v.aging?.days}d · {ag.label}
+                  </span>
+                </div>
+                <div className="text-xs text-slate-500 mb-3">Purchased: <span className="font-medium text-slate-700"><HoverADDate date={v.purchase_date} /></span></div>
+
+                {showFinRow && (
+                  <div className="grid grid-cols-3 gap-2 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100 mb-3 text-xs">
+                    {!hideFinancials && (
+                      <div>
+                        <div className="text-slate-400">Investment</div>
+                        <div className="font-semibold text-slate-800">{formatNPR(v.total_investment)}</div>
+                      </div>
+                    )}
+                    {!isPartsOnly && (
+                      <div>
+                        <div className="text-slate-400">Selling</div>
+                        <div className="font-semibold text-slate-800">{v.selling_price ? formatNPR(v.selling_price) : "—"}</div>
+                      </div>
+                    )}
+                    {!hideFinancials && (
+                      <div>
+                        <div className="text-slate-400">Margin</div>
+                        <div className={`font-semibold ${v.low_margin ? "text-red-600" : "text-green-600"}`}>
+                          {v.profit_margin !== null && v.profit_margin !== undefined ? `${v.profit_margin}%` : "—"}
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-1 pt-1 border-t border-slate-50">
+                  <button
+                    onClick={e => { e.stopPropagation(); navigate(`/inventory/${v.id}`); }}
+                    className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+                    data-testid="view-vehicle-btn"
+                  >
+                    <Eye size={15} className="text-slate-500" />
+                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={e => handleDelete(v.id, e)}
+                      className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"
+                      data-testid="delete-vehicle-btn"
+                    >
+                      <Trash2 size={15} className="text-red-400" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Import Stock */}
       {isAdmin && (
