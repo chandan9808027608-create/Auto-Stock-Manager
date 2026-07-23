@@ -221,7 +221,11 @@ export default function VehicleDetail() {
             data-testid="vehicle-status-select"
             title={canManageStock ? "Change vehicle status" : "Parts department can move a vehicle between Available, In Repair, and Scrap"}
           >
-            {(canManageStock ? VEHICLE_STATUS_OPTIONS : VEHICLE_STATUS_OPTIONS.filter(o => PARTS_ALLOWED_VEHICLE_STATUSES.includes(o.value))).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {/* Always include the vehicle's actual current status as an option, even if it falls
+               outside what this role can pick — otherwise a filtered <select> with no matching
+               <option> silently mis-renders (browsers show a blank/wrong label). The select is
+               disabled in that case anyway, so this can't be used to bypass the restriction. */}
+            {(canManageStock ? VEHICLE_STATUS_OPTIONS : VEHICLE_STATUS_OPTIONS.filter(o => PARTS_ALLOWED_VEHICLE_STATUSES.includes(o.value) || o.value === vehicle.status)).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           {canManageStock && (isEditing ? (
             <>

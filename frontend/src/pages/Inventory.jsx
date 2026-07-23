@@ -318,7 +318,7 @@ export default function Inventory() {
                 <div className="text-xs text-slate-500 mb-3">Purchased: <span className="font-medium text-slate-700"><HoverADDate date={v.purchase_date} /></span></div>
 
                 {showFinRow && (
-                  <div className="grid grid-cols-3 gap-2 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100 mb-3 text-xs">
+                  <div className="flex gap-4 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100 mb-3 text-xs">
                     {!hideFinancials && (
                       <div>
                         <div className="text-slate-400">Investment</div>

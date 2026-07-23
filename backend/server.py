@@ -1830,6 +1830,34 @@ app.add_middleware(CORSMiddleware, allow_credentials=True,
 # which was causing uploaded photos/docs to vanish after the backend slept.
 # ══════════════════════════════════════════════════════════════════════
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif"}
+
+def _upload_type_ok(file: UploadFile, allowed_types: set, allowed_extensions: set) -> bool:
+    """True if the upload's content-type OR filename extension is on the allow-list.
+    Browsers (Windows Chrome/Edge especially) frequently can't identify HEIC/HEIF —
+    e.g. photos extracted from a zip lose the extended-attribute MIME hint — and report
+    a generic "application/octet-stream" instead. Falling back to the extension avoids
+    rejecting legitimate photos just because the browser guessed wrong; the bytes are
+    still decoded (and validated) for real by Pillow at compression time below."""
+    if file.content_type in allowed_types:
+        return True
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    return ext in allowed_extensions
+
+_EXT_CONTENT_TYPES = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
+    ".gif": "image/gif", ".heic": "image/heic", ".heif": "image/heif", ".pdf": "application/pdf",
+}
+
+def _resolved_content_type(file: UploadFile) -> str:
+    """The content-type to actually store. Falls back to a lookup by extension when the
+    browser reported a generic/missing type — otherwise the wrong MIME ends up baked into
+    the stored `data:` URI and browsers refuse to render or download it correctly."""
+    if file.content_type and file.content_type != "application/octet-stream":
+        return file.content_type
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    return _EXT_CONTENT_TYPES.get(ext, file.content_type or "application/octet-stream")
+
 MAX_PHOTO_SIZE = 5 * 1024 * 1024  # 5 MB, enforced on the compressed output
 RAW_UPLOAD_MAX = 25 * 1024 * 1024  # 25 MB cap on the original file straight off a phone camera
 PHOTO_MAX_DIMENSION = 1600  # px, longest side
@@ -1865,12 +1893,12 @@ async def get_vehicle_photos(vid: str, cu: dict = Depends(require("vehicle_media
 async def upload_vehicle_photo(vid: str, file: UploadFile = File(...), cu: dict = Depends(require("vehicle_media", "create"))):
     v = await db.vehicles.find_one({"id": vid})
     if not v: raise HTTPException(404, "Vehicle not found")
-    if file.content_type not in ALLOWED_IMAGE_TYPES:
+    if not _upload_type_ok(file, ALLOWED_IMAGE_TYPES, IMAGE_EXTENSIONS):
         raise HTTPException(400, f"File type {file.content_type} not allowed. Use JPEG/PNG/WebP/HEIC.")
     content = await file.read()
     if len(content) > RAW_UPLOAD_MAX:
         raise HTTPException(400, "File too large. Max 25MB.")
-    content_type = file.content_type
+    content_type = _resolved_content_type(file)
     try:
         content, content_type = _compress_photo(content)
     except Exception:
@@ -1897,6 +1925,7 @@ async def delete_vehicle_photo(vid: str, photo_id: str, cu: dict = Depends(requi
 # Also stored as base64 in MongoDB (db.legal_documents) for the same reason.
 # ══════════════════════════════════════════════════════════════════════
 ALLOWED_DOC_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"}
+DOC_EXTENSIONS = IMAGE_EXTENSIONS | {".pdf"}
 DOC_TYPES = ["bluebook", "insurance", "tax_clearance", "transfer", "other"]
 
 def _doc_out(d: dict) -> dict:
@@ -1915,7 +1944,7 @@ async def get_legal_documents(vid: str, cu: dict = Depends(require("vehicle_medi
 async def upload_legal_document(vid: str, file: UploadFile = File(...), doc_type: str = Form("other"), cu: dict = Depends(require("vehicle_media", "create"))):
     v = await db.vehicles.find_one({"id": vid})
     if not v: raise HTTPException(404, "Vehicle not found")
-    if file.content_type not in ALLOWED_DOC_TYPES:
+    if not _upload_type_ok(file, ALLOWED_DOC_TYPES, DOC_EXTENSIONS):
         raise HTTPException(400, "Only PDF/JPEG/PNG/HEIC allowed for documents.")
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
@@ -1923,7 +1952,7 @@ async def upload_legal_document(vid: str, file: UploadFile = File(...), doc_type
     doc_id = str(uuid.uuid4())
     doc = {
         "id": doc_id, "vehicle_id": vid, "filename": file.filename or f"{doc_id}.pdf",
-        "content_type": file.content_type, "data": base64.b64encode(content).decode("ascii"),
+        "content_type": _resolved_content_type(file), "data": base64.b64encode(content).decode("ascii"),
         "doc_type": doc_type, "original_name": file.filename,
         "uploaded_at": datetime.now(timezone.utc).isoformat(), "size": len(content),
     }
