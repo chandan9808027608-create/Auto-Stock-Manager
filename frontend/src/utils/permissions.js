@@ -1,7 +1,7 @@
 // Mirrors the backend's ROLE_PERMISSIONS in server.py. "admin" (Super admin)
 // always has full access; other roles only see what's listed here.
 export const ROLE_NAV_PATHS = {
-  stock_supervisor: ["/inventory", "/sales", "/jobs", "/customers", "/team", "/settings"],
+  stock_supervisor: ["/inventory", "/sales", "/sold-stock", "/jobs", "/customers", "/team", "/settings"],
   // Parts department gets read-only inventory browsing plus the ability to flip a vehicle's
   // pipeline status (Available <-> In Repair, or Scrap) — see PARTS_ALLOWED_STATUSES in server.py.
   parts_supervisor: ["/spare-parts", "/jobs", "/inventory", "/team", "/settings"],

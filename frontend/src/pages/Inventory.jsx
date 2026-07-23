@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Search, Eye, Trash2, Filter, X, UploadCloud, EyeOff, Package, Wallet, DollarSign, Lock, Moon } from "lucide-react";
+import { Plus, Search, Eye, Trash2, Filter, X, UploadCloud, EyeOff, Package, Wallet, DollarSign, Lock, Moon, Archive } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getAgingStyle, getStatusStyle, BRANDS, VEHICLE_STATUS_OPTIONS, formatOwnership } from "../utils/helpers";
@@ -9,7 +9,9 @@ import HoverADDate from "../components/HoverADDate";
 import { useAuth } from "../context/AuthContext";
 import { hasFullVehicleAccess } from "../utils/permissions";
 
-const STATUSES = ["all", ...VEHICLE_STATUS_OPTIONS.map(o => o.value)];
+// Sold vehicles get their own archive (Sold Stock page) rather than sitting in the active
+// pipeline grid, so "sold" is left out of this page's status filter entirely.
+const STATUSES = ["all", ...VEHICLE_STATUS_OPTIONS.filter(o => o.value !== "sold").map(o => o.value)];
 const AGING_CATEGORIES = ["all", "fresh", "normal", "slow", "dead"];
 const AGING_RANGES = { fresh: "0–30 days", normal: "31–45 days", slow: "46–60 days", dead: "60+ days" };
 
@@ -93,7 +95,8 @@ export default function Inventory() {
   useEffect(() => { fetchVehicles(); }, [fetchVehicles]);
 
   useEffect(() => {
-    let result = [...vehicles];
+    // Sold vehicles live in the Sold Stock archive, not the active inventory grid.
+    let result = vehicles.filter(v => v.status !== "sold");
 
     if (statusFilter !== "all") result = result.filter(v => v.status === statusFilter);
     if (agingFilter !== "all") result = result.filter(v => v.aging?.category === agingFilter);
@@ -161,6 +164,15 @@ export default function Inventory() {
           <p className="text-sm text-slate-500">{filtered.length} vehicles found</p>
         </div>
         <div className="flex items-center gap-2">
+          {canManageStock && (
+            <button
+              onClick={() => navigate("/sold-stock")}
+              data-testid="sold-stock-link"
+              className="flex items-center gap-2 border border-slate-200 text-slate-700 text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-slate-50 transition-all active:scale-95"
+            >
+              <Archive size={16} /> Sold Stock
+            </button>
+          )}
           {canManageStock && unpricedVisible.length > 0 && (
             <button
               onClick={hideUnpriced}
