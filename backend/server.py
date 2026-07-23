@@ -330,10 +330,11 @@ async def ai_price_suggestion(req: AIPriceRequest, cu: dict = Depends(admin_only
         "for the vehicle described, reasoning from the sold-history comparables given and the general Nepal used-bike market. "
         f"{MARKDOWN_NOTE}"
     )
-    # ownership_number == 99 is a sentinel (not a real owner count): bluebook lost/damaged,
-    # running on a transcript copy pending renewal — mirrors TRANSCRIPT_OWNERSHIP in helpers.js.
-    ownership_desc = "on a transcript bluebook (original lost/damaged, renewal pending)" if v.ownership_number == 99 \
-        else f"{v.ownership_number}{'st' if v.ownership_number == 1 else 'th'} owner"
+    # ownership_number > 90 encodes a transcript (bluebook lost/damaged, duplicate copy
+    # issued): TRANSCRIPT_BASE(90) + issue count — mirrors TRANSCRIPT_BASE in helpers.js.
+    def _ordinal(n): return f"{n}{'st' if n == 1 else 'nd' if n == 2 else 'rd' if n == 3 else 'th'}"
+    ownership_desc = f"on its {_ordinal(v.ownership_number - 90)} transcript bluebook (original lost/damaged)" if v.ownership_number > 90 \
+        else f"{_ordinal(v.ownership_number)} owner"
     prompt = (
         f"Vehicle to price: {v.brand} {v.model} {v.year}, {v.engine_cc or '?'}cc {v.fuel_type}, "
         f"{ownership_desc}, {v.kilometer_run or '?'}km, "

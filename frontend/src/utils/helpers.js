@@ -35,20 +35,22 @@ export const VEHICLE_STATUS_OPTIONS = [
   { value: "sold", label: "Sold" },
 ];
 
-// Sentinel ownership_number (not a real owner count): the bluebook is lost/damaged and
-// the vehicle is running on a transcript (duplicate) copy pending renewal. Kept non-zero
-// so it stays truthy — several call sites use `ownership_number || 1` as a missing-value
-// fallback, and 0 would silently collide with that.
-export const TRANSCRIPT_OWNERSHIP = 99;
+const ordinal = (n) => `${n}${["st", "nd", "rd"][n - 1] || "th"}`;
+
+// ownership_number encodes a transcript (bluebook lost/damaged, duplicate copy issued) as
+// TRANSCRIPT_BASE + issue count, e.g. 91 = 1st transcript, 92 = 2nd transcript. Kept well
+// above the real 1-5 owner range, and non-zero so it stays truthy — several call sites use
+// `ownership_number || 1` as a missing-value fallback, which 0 would silently collide with.
+export const TRANSCRIPT_BASE = 90;
 
 export const formatOwnership = (n) => {
-  if (n === TRANSCRIPT_OWNERSHIP) return "Transcript";
-  return `${n}${["st", "nd", "rd"][n - 1] || "th"} Owner`;
+  if (n > TRANSCRIPT_BASE) return `${ordinal(n - TRANSCRIPT_BASE)} Transcript`;
+  return `${ordinal(n)} Owner`;
 };
 
 export const OWNERSHIP_OPTIONS = [
   ...[1, 2, 3, 4, 5].map(n => ({ value: n, label: formatOwnership(n) })),
-  { value: TRANSCRIPT_OWNERSHIP, label: "Transcript (bluebook lost/damaged, in renewal)" },
+  ...[1, 2, 3, 4, 5].map(n => ({ value: TRANSCRIPT_BASE + n, label: formatOwnership(TRANSCRIPT_BASE + n) })),
 ];
 
 export const getJobStyle = (status) => {
