@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Search, Eye, Trash2, Filter, X, UploadCloud, EyeOff, Package, Wallet, DollarSign, Lock } from "lucide-react";
+import { Plus, Search, Eye, Trash2, Filter, X, UploadCloud, EyeOff, Package, Wallet, DollarSign, Lock, Moon } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getAgingStyle, getStatusStyle, BRANDS, VEHICLE_STATUS_OPTIONS, formatOwnership } from "../utils/helpers";
@@ -12,6 +12,16 @@ import { hasFullVehicleAccess } from "../utils/permissions";
 const STATUSES = ["all", ...VEHICLE_STATUS_OPTIONS.map(o => o.value)];
 const AGING_CATEGORIES = ["all", "fresh", "normal", "slow", "dead"];
 const AGING_RANGES = { fresh: "0–30 days", normal: "31–45 days", slow: "46–60 days", dead: "60+ days" };
+
+// Orders active stock by days-in-inventory, oldest first, so aging vehicles surface for
+// attention. Scrap is a "do not disturb" stage — it's excluded from that ordering and always
+// pinned to the bottom, regardless of how many days it has sat there.
+const sortStock = (a, b) => {
+  const aScrap = a.status === "scrap";
+  const bScrap = b.status === "scrap";
+  if (aScrap !== bScrap) return aScrap ? 1 : -1;
+  return (b.aging?.days ?? 0) - (a.aging?.days ?? 0);
+};
 
 const EMPTY = {
   brand: "", model: "", year: new Date().getFullYear(), engine_cc: 125, fuel_type: "Petrol", vehicle_type: "bike",
@@ -95,6 +105,9 @@ export default function Inventory() {
         v.registration_number?.toLowerCase().includes(q) || v.purchase_source?.toLowerCase().includes(q)
       );
     }
+
+    result.sort(sortStock);
+
     setFiltered(result);
   }, [vehicles, search, statusFilter, brandFilter, agingFilter]);
 
@@ -293,12 +306,13 @@ export default function Inventory() {
             const ag = getAgingStyle(v.aging?.category);
             const st = getStatusStyle(v.status);
             const showFinRow = !hideFinancials || !isPartsOnly;
+            const isDND = v.status === "scrap";
             return (
               <div
                 key={v.id}
                 data-testid="vehicle-row"
                 onClick={() => navigate(`/inventory/${v.id}`)}
-                className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-shadow cursor-pointer"
+                className={`bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-shadow cursor-pointer ${isDND ? "opacity-60 saturate-50" : ""}`}
               >
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="min-w-0">
@@ -306,7 +320,10 @@ export default function Inventory() {
                     <div className="text-xs text-slate-500 mt-0.5">{v.year} · {v.engine_cc}cc · {v.fuel_type} · {formatOwnership(v.ownership_number)}</div>
                     {v.registration_number && <div className="text-xs font-mono text-slate-500 mt-0.5">{v.registration_number}</div>}
                   </div>
-                  <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${st.bg} ${st.text}`}>{st.label}</span>
+                  <span className={`shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${st.bg} ${st.text}`}>
+                    {isDND && <Moon size={11} title="Do Not Disturb — snoozed" />}
+                    {st.label}
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-slate-500 mb-3">

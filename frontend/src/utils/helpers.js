@@ -26,13 +26,15 @@ export const getStatusStyle = (status) => {
   return map[status] || map.available;
 };
 
+// "scrap" is listed last on purpose: it's a do-not-disturb/terminal stage that should sink
+// to the bottom of any list built from this order, rather than interleave with active stages.
 export const VEHICLE_STATUS_OPTIONS = [
   { value: "unlisted", label: "Unlisted" },
-  { value: "scrap", label: "Scrap" },
   { value: "in_repair", label: "In Repair" },
   { value: "available", label: "Available" },
   { value: "reserved", label: "Reserved" },
   { value: "sold", label: "Sold" },
+  { value: "scrap", label: "Scrap" },
 ];
 
 const ordinal = (n) => `${n}${["st", "nd", "rd"][n - 1] || "th"}`;
