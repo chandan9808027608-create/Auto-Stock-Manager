@@ -15,14 +15,14 @@ const STATUSES = ["all", ...VEHICLE_STATUS_OPTIONS.filter(o => o.value !== "sold
 const AGING_CATEGORIES = ["all", "fresh", "normal", "slow", "dead"];
 const AGING_RANGES = { fresh: "0–30 days", normal: "31–45 days", slow: "46–60 days", dead: "60+ days" };
 
-// Orders active stock by days-in-inventory, oldest first, so aging vehicles surface for
-// attention. Scrap is a "do not disturb" stage — it's excluded from that ordering and always
-// pinned to the bottom, regardless of how many days it has sat there.
+// Orders active stock newest first (most recently added). Scrap is a "do not disturb" stage —
+// it's excluded from that ordering and always pinned to the bottom, regardless of how many days
+// it has sat there.
 const sortStock = (a, b) => {
   const aScrap = a.status === "scrap";
   const bScrap = b.status === "scrap";
   if (aScrap !== bScrap) return aScrap ? 1 : -1;
-  return (b.aging?.days ?? 0) - (a.aging?.days ?? 0);
+  return (a.aging?.days ?? 0) - (b.aging?.days ?? 0);
 };
 
 const EMPTY = {

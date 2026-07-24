@@ -4,7 +4,7 @@ export const ROLE_NAV_PATHS = {
   stock_supervisor: ["/inventory", "/sales", "/sold-stock", "/jobs", "/customers", "/team", "/settings"],
   // Parts department gets read-only inventory browsing plus the ability to flip a vehicle's
   // pipeline status (Available <-> In Repair, or Scrap) — see PARTS_ALLOWED_STATUSES in server.py.
-  parts_supervisor: ["/spare-parts", "/jobs", "/inventory", "/team", "/settings"],
+  parts_supervisor: ["/spare-parts", "/vendors", "/jobs", "/inventory", "/team", "/settings"],
 };
 
 export const ROLE_DEFAULT_PATH = {

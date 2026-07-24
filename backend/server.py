@@ -98,6 +98,7 @@ ROLE_PERMISSIONS = {
         "vehicles": {"view", "edit_status"},  # read-only vehicle data, plus limited pipeline-status changes (see PARTS_ALLOWED_STATUSES)
         "vehicle_media": {"view"},  # read-only, so opening a vehicle's detail page doesn't 403 loading photos/documents
         "vendor_lookup": {"view", "create"},  # supplier picker + inline "add new vendor" on a part
+        "vendors": {"view", "edit", "delete", "manage_payments"},  # full Vendor Management tab access
         "team": {"view", "create", "edit", "delete"},
     },
 }
@@ -1440,7 +1441,7 @@ async def delete_partner(pid: str, cu: dict = Depends(admin_only)):
 
 # ── VENDORS ───────────────────────────────────────────────────────────
 @api_router.get("/vendors")
-async def get_vendors(cu: dict = Depends(admin_only)):
+async def get_vendors(cu: dict = Depends(require("vendors", "view"))):
     vendors = await db.vendors.find({}, {"_id": 0}).to_list(200)
     for v in vendors:
         vehicles = await db.vehicles.find({"vendor_id": v["id"]}, {"_id": 0}).to_list(200)
@@ -1467,13 +1468,13 @@ async def create_vendor(vendor: VendorCreate, cu: dict = Depends(require("vendor
     return v
 
 @api_router.put("/vendors/{vid}")
-async def update_vendor(vid: str, vendor: VendorCreate, cu: dict = Depends(admin_only)):
+async def update_vendor(vid: str, vendor: VendorCreate, cu: dict = Depends(require("vendors", "edit"))):
     r = await db.vendors.update_one({"id": vid}, {"$set": vendor.model_dump()})
     if r.matched_count == 0: raise HTTPException(404, "Not found")
     return await db.vendors.find_one({"id": vid}, {"_id": 0})
 
 @api_router.delete("/vendors/{vid}")
-async def delete_vendor(vid: str, cu: dict = Depends(admin_only)):
+async def delete_vendor(vid: str, cu: dict = Depends(require("vendors", "delete"))):
     r = await db.vendors.delete_one({"id": vid})
     if r.deleted_count == 0: raise HTTPException(404, "Not found")
     return {"message": "Deleted"}
@@ -1490,7 +1491,7 @@ async def search_vendors(q: str = "", vendor_type: Optional[str] = None, cu: dic
     return vendors[:8] if q else vendors
 
 @api_router.get("/vendors/{vid}/payments")
-async def get_vendor_payments(vid: str, cu: dict = Depends(admin_only)):
+async def get_vendor_payments(vid: str, cu: dict = Depends(require("vendors", "view"))):
     payments = await db.vendor_payments.find({"vendor_id": vid}, {"_id": 0}).sort("payment_date", -1).to_list(500)
     vehicles = await db.vehicles.find({"vendor_id": vid}, {"_id": 0}).to_list(200)
     parts = await db.spare_parts.find({"vendor_id": vid}, {"_id": 0}).to_list(1000)
@@ -1510,7 +1511,7 @@ async def get_vendor_payments(vid: str, cu: dict = Depends(admin_only)):
             "vehicles": vehicles, "parts_bills": parts_bills}
 
 @api_router.post("/vendor-payments")
-async def create_vendor_payment(payment: VendorPaymentCreate, cu: dict = Depends(admin_only)):
+async def create_vendor_payment(payment: VendorPaymentCreate, cu: dict = Depends(require("vendors", "manage_payments"))):
     p = payment.model_dump()
     p["id"] = str(uuid.uuid4())
     p["payment_date"] = p.get("payment_date") or datetime.now(timezone.utc).date().isoformat()
@@ -1521,7 +1522,7 @@ async def create_vendor_payment(payment: VendorPaymentCreate, cu: dict = Depends
     return p
 
 @api_router.delete("/vendor-payments/{pid}")
-async def delete_vendor_payment(pid: str, cu: dict = Depends(admin_only)):
+async def delete_vendor_payment(pid: str, cu: dict = Depends(require("vendors", "manage_payments"))):
     r = await db.vendor_payments.delete_one({"id": pid})
     if r.deleted_count == 0: raise HTTPException(404, "Not found")
     return {"message": "Deleted"}
