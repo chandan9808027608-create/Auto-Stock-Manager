@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Search, Wrench, X, Package, Pencil } from "lucide-react";
+import { Plus, Search, Wrench, X, Package, Pencil, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, getJobStyle } from "../utils/helpers";
@@ -11,6 +11,9 @@ import { canEditJobs, canDeleteJobs } from "../utils/permissions";
 
 const STATUSES = ["all", "pending", "in_progress", "completed"];
 const EMPTY_FORM = { vehicle_id: "", work_description: "", mechanic_id: "", mechanic_name: "", estimated_cost: "", notes: "", coupon_no: "", job_date: "" };
+
+const makeKey = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+const EMPTY_EXTERNAL_PART = { name: "", quantity: "1", unit_cost: "" };
 
 function getErrMsg(err) {
   if (!err.response) return "Network error - could not reach the server";
@@ -41,6 +44,7 @@ export default function JobCards() {
   // Parts linked to the new job
   const [jobParts, setJobParts] = useState([]);
   const [partSearch, setPartSearch] = useState("");
+  const [externalPart, setExternalPart] = useState({ ...EMPTY_EXTERNAL_PART });
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -83,22 +87,31 @@ export default function JobCards() {
 
   const addPartToJob = (part) => {
     if (part.quantity <= 0) { toast.error(`${part.name} is out of stock`); return; }
-    setJobParts(prev => [...prev, { part_id: part.id, part_name: part.name, quantity: 1, unit_cost: part.unit_cost || 0, available_qty: part.quantity, original_qty: 0 }]);
+    setJobParts(prev => [...prev, { _key: makeKey(), part_id: part.id, part_name: part.name, quantity: 1, unit_cost: part.unit_cost || 0, available_qty: part.quantity, original_qty: 0, external: false }]);
     setPartSearch("");
   };
 
-  const updatePartQty = (part_id, val) => {
-    const num = parseInt(val) || 1;
-    const part = jobParts.find(p => p.part_id === part_id);
-    if (num > part.available_qty) { toast.error(`Only ${part.available_qty} in stock`); return; }
-    setJobParts(prev => prev.map(p => p.part_id === part_id ? { ...p, quantity: Math.max(1, num) } : p));
+  const addExternalPartToJob = () => {
+    const name = externalPart.name.trim();
+    const qty = parseInt(externalPart.quantity) || 1;
+    const cost = Number(externalPart.unit_cost) || 0;
+    if (!name) { toast.error("Enter a part name"); return; }
+    setJobParts(prev => [...prev, { _key: makeKey(), part_id: null, part_name: name, quantity: Math.max(1, qty), unit_cost: cost, external: true }]);
+    setExternalPart({ ...EMPTY_EXTERNAL_PART });
   };
 
-  const removePartFromJob = (part_id) => setJobParts(prev => prev.filter(p => p.part_id !== part_id));
+  const updatePartQty = (key, val) => {
+    const num = parseInt(val) || 1;
+    const part = jobParts.find(p => p._key === key);
+    if (!part.external && num > part.available_qty) { toast.error(`Only ${part.available_qty} in stock`); return; }
+    setJobParts(prev => prev.map(p => p._key === key ? { ...p, quantity: Math.max(1, num) } : p));
+  };
+
+  const removePartFromJob = (key) => setJobParts(prev => prev.filter(p => p._key !== key));
 
   const nextCouponNo = () => Math.max(0, ...jobs.map(j => Number(j.coupon_no) || 0)) + 1;
 
-  const openModal = () => { setEditingJob(null); setForm({ ...EMPTY_FORM, coupon_no: String(nextCouponNo()) }); setJobParts([]); setPartSearch(""); setShowModal(true); };
+  const openModal = () => { setEditingJob(null); setForm({ ...EMPTY_FORM, coupon_no: String(nextCouponNo()) }); setJobParts([]); setPartSearch(""); setExternalPart({ ...EMPTY_EXTERNAL_PART }); setShowModal(true); };
 
   const openEditModal = (job) => {
     setEditingJob(job);
@@ -113,17 +126,21 @@ export default function JobCards() {
       job_date: job.job_date || "",
     });
     setJobParts((job.parts || []).map(p => {
-      const stock = spareParts.find(sp => sp.id === p.part_id);
+      const isExternal = !!p.external || !p.part_id;
+      const stock = !isExternal ? spareParts.find(sp => sp.id === p.part_id) : null;
       return {
-        part_id: p.part_id,
+        _key: makeKey(),
+        part_id: p.part_id || null,
         part_name: p.part_name,
         quantity: p.quantity,
         unit_cost: p.unit_cost,
         original_qty: p.quantity,
         available_qty: (stock?.quantity || 0) + p.quantity,
+        external: isExternal,
       };
     }));
     setPartSearch("");
+    setExternalPart({ ...EMPTY_EXTERNAL_PART });
     setShowModal(true);
   };
 
@@ -140,7 +157,7 @@ export default function JobCards() {
           mechanic_name: form.mechanic_name,
           estimated_cost: Number(form.estimated_cost),
           notes: form.notes,
-          parts: jobParts.map(p => ({ part_id: p.part_id, part_name: p.part_name, quantity: p.quantity, unit_cost: p.unit_cost })),
+          parts: jobParts.map(p => ({ part_id: p.part_id, part_name: p.part_name, quantity: p.quantity, unit_cost: p.unit_cost, external: !!p.external })),
         });
         toast.success("Job card updated!");
         closeModal();
@@ -157,7 +174,7 @@ export default function JobCards() {
         ...form,
         estimated_cost: Number(form.estimated_cost),
         coupon_no: Number(form.coupon_no),
-        parts: jobParts.map(p => ({ part_id: p.part_id, part_name: p.part_name, quantity: p.quantity, unit_cost: p.unit_cost })),
+        parts: jobParts.map(p => ({ part_id: p.part_id, part_name: p.part_name, quantity: p.quantity, unit_cost: p.unit_cost, external: !!p.external })),
       });
       toast.success("Job card created!");
       closeModal();
@@ -279,7 +296,7 @@ export default function JobCards() {
                     </div>
                     {job.parts.map((p, i) => (
                       <div key={i} className="flex justify-between text-xs text-slate-600 py-0.5">
-                        <span>{p.part_name} × {p.quantity}</span>
+                        <span>{p.part_name} × {p.quantity}{(p.external || !p.part_id) && <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-orange-500">External</span>}</span>
                         <span className="font-medium">{formatNPR(p.quantity * p.unit_cost)}</span>
                       </div>
                     ))}
@@ -420,19 +437,22 @@ export default function JobCards() {
                 {jobParts.length > 0 && (
                   <div className="mt-2 bg-slate-50 rounded-lg p-2 space-y-1.5" data-testid="job-parts-list">
                     {jobParts.map(p => (
-                      <div key={p.part_id} className="flex items-center gap-2 bg-white rounded-lg px-2 py-1.5 border border-slate-100 text-xs">
-                        <Package size={11} className="text-slate-400 shrink-0" />
-                        <span className="flex-1 font-medium text-slate-700 truncate">{p.part_name}</span>
+                      <div key={p._key} className="flex items-center gap-2 bg-white rounded-lg px-2 py-1.5 border border-slate-100 text-xs">
+                        {p.external ? <ShoppingBag size={11} className="text-orange-400 shrink-0" /> : <Package size={11} className="text-slate-400 shrink-0" />}
+                        <span className="flex-1 min-w-0">
+                          <span className="font-medium text-slate-700 truncate block">{p.part_name}</span>
+                          {p.external && <span className="text-[10px] font-semibold uppercase tracking-wide text-orange-500">Externally bought</span>}
+                        </span>
                         <span className="text-slate-400 shrink-0">Qty:</span>
                         <input
                           type="text"
                           inputMode="numeric"
                           value={p.quantity}
-                          onChange={e => updatePartQty(p.part_id, e.target.value)}
+                          onChange={e => updatePartQty(p._key, e.target.value)}
                           className="w-12 h-6 text-center text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         <span className="text-slate-700 font-medium w-20 text-right shrink-0">{formatNPR(p.quantity * p.unit_cost)}</span>
-                        <button type="button" onClick={() => removePartFromJob(p.part_id)} className="text-red-400 hover:text-red-600 shrink-0">
+                        <button type="button" onClick={() => removePartFromJob(p._key)} className="text-red-400 hover:text-red-600 shrink-0">
                           <X size={12} />
                         </button>
                       </div>
@@ -443,6 +463,44 @@ export default function JobCards() {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Externally Bought Parts */}
+              <div>
+                <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 mb-2">
+                  <ShoppingBag size={12} /> Externally Bought Parts <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <p className="text-[11px] text-slate-400 mb-2 -mt-1">For parts bought specifically for this vehicle that aren't in your spare parts inventory.</p>
+                <div className="flex gap-2">
+                  <input
+                    value={externalPart.name}
+                    onChange={e => setExternalPart({ ...externalPart, name: e.target.value })}
+                    placeholder="Part name"
+                    className={`${inp} flex-1`}
+                    data-testid="external-part-name-input"
+                  />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={externalPart.quantity}
+                    onChange={e => setExternalPart({ ...externalPart, quantity: e.target.value })}
+                    placeholder="Qty"
+                    className={`${inp} w-16`}
+                    data-testid="external-part-qty-input"
+                  />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={externalPart.unit_cost}
+                    onChange={e => setExternalPart({ ...externalPart, unit_cost: e.target.value })}
+                    placeholder="Cost"
+                    className={`${inp} w-24`}
+                    data-testid="external-part-cost-input"
+                  />
+                  <button type="button" onClick={addExternalPartToJob} className="h-9 px-3 bg-orange-100 text-orange-700 text-xs font-semibold rounded-lg hover:bg-orange-200 transition-colors shrink-0" data-testid="add-external-part-btn">
+                    Add
+                  </button>
+                </div>
               </div>
 
               <div>
