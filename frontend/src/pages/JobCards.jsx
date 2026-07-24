@@ -101,10 +101,18 @@ export default function JobCards() {
   };
 
   const updatePartQty = (key, val) => {
-    const num = parseInt(val) || 1;
+    // Let the field go empty while the user is clearing it to retype a new number —
+    // snapping straight back to 1 here would fight every backspace keystroke.
+    if (val === "") { setJobParts(prev => prev.map(p => p._key === key ? { ...p, quantity: "" } : p)); return; }
+    const num = parseInt(val, 10);
+    if (Number.isNaN(num)) return;
     const part = jobParts.find(p => p._key === key);
     if (!part.external && num > part.available_qty) { toast.error(`Only ${part.available_qty} in stock`); return; }
-    setJobParts(prev => prev.map(p => p._key === key ? { ...p, quantity: Math.max(1, num) } : p));
+    setJobParts(prev => prev.map(p => p._key === key ? { ...p, quantity: num } : p));
+  };
+
+  const normalizePartQty = (key) => {
+    setJobParts(prev => prev.map(p => p._key === key && (p.quantity === "" || Number(p.quantity) < 1) ? { ...p, quantity: 1 } : p));
   };
 
   const removePartFromJob = (key) => setJobParts(prev => prev.filter(p => p._key !== key));
@@ -157,7 +165,7 @@ export default function JobCards() {
           mechanic_name: form.mechanic_name,
           estimated_cost: Number(form.estimated_cost),
           notes: form.notes,
-          parts: jobParts.map(p => ({ part_id: p.part_id, part_name: p.part_name, quantity: p.quantity, unit_cost: p.unit_cost, external: !!p.external })),
+          parts: jobParts.map(p => ({ part_id: p.part_id, part_name: p.part_name, quantity: Math.max(1, parseInt(p.quantity, 10) || 1), unit_cost: p.unit_cost, external: !!p.external })),
         });
         toast.success("Job card updated!");
         closeModal();
@@ -174,7 +182,7 @@ export default function JobCards() {
         ...form,
         estimated_cost: Number(form.estimated_cost),
         coupon_no: Number(form.coupon_no),
-        parts: jobParts.map(p => ({ part_id: p.part_id, part_name: p.part_name, quantity: p.quantity, unit_cost: p.unit_cost, external: !!p.external })),
+        parts: jobParts.map(p => ({ part_id: p.part_id, part_name: p.part_name, quantity: Math.max(1, parseInt(p.quantity, 10) || 1), unit_cost: p.unit_cost, external: !!p.external })),
       });
       toast.success("Job card created!");
       closeModal();
@@ -449,6 +457,7 @@ export default function JobCards() {
                           inputMode="numeric"
                           value={p.quantity}
                           onChange={e => updatePartQty(p._key, e.target.value)}
+                          onBlur={() => normalizePartQty(p._key)}
                           className="w-12 h-6 text-center text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                         />
                         <span className="text-slate-700 font-medium w-20 text-right shrink-0">{formatNPR(p.quantity * p.unit_cost)}</span>
