@@ -135,6 +135,7 @@ export function AddVehicleModal({ form, setForm, onClose, onSubmit, saving, phot
                 value={form.purchase_from}
                 onChange={(name, vendorId) => setForm({ ...form, purchase_from: name, vendor_id: vendorId || form.vendor_id })}
                 placeholder="Type vendor name to search..."
+                vendorType="vehicles"
               />
             </Field>
             <Field label="Condition">

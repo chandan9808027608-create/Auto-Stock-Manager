@@ -9,7 +9,7 @@ import api from "../utils/api";
  *   placeholder - input placeholder
  *   className   - extra classes
  */
-export default function VendorAutocomplete({ value, onChange, placeholder = "Type to search vendors...", className = "" }) {
+export default function VendorAutocomplete({ value, onChange, placeholder = "Type to search vendors...", className = "", vendorType = "" }) {
   const [query, setQuery] = useState(value || "");
   const [suggestions, setSuggestions] = useState([]);
   const [open, setOpen] = useState(false);
@@ -33,12 +33,13 @@ export default function VendorAutocomplete({ value, onChange, placeholder = "Typ
     if (!q.trim()) { setSuggestions([]); setOpen(false); return; }
     setLoading(true);
     try {
-      const r = await api.get(`/vendors/search?q=${encodeURIComponent(q)}`);
+      const typeParam = vendorType ? `&vendor_type=${encodeURIComponent(vendorType)}` : "";
+      const r = await api.get(`/vendors/search?q=${encodeURIComponent(q)}${typeParam}`);
       setSuggestions(r.data);
       setOpen(r.data.length > 0);
     } catch { setSuggestions([]); }
     finally { setLoading(false); }
-  }, []);
+  }, [vendorType]);
 
   const handleChange = (e) => {
     const val = e.target.value;

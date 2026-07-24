@@ -327,6 +327,7 @@ export default function VehicleDetail() {
                       value={editForm.purchase_from || ""}
                       onChange={(name, vendorId) => setEditForm({ ...editForm, purchase_from: name, vendor_id: vendorId || editForm.vendor_id })}
                       placeholder="Vendor name..."
+                      vendorType="vehicles"
                     />
                   </div>
                 ) : (

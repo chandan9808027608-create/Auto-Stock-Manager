@@ -152,7 +152,7 @@ export default function SpareParts() {
       const [p, s, v] = await Promise.all([
         api.get("/spare-parts"),
         api.get("/spare-parts/summary"),
-        api.get("/vendors/search?q="),
+        api.get("/vendors/search?q=&vendor_type=parts"),
       ]);
       setParts(p.data); setSummary(s.data); setVendors(v.data);
     } catch { toast.error("Failed to load parts"); }
@@ -248,7 +248,7 @@ export default function SpareParts() {
     if (!newVendor.name || !newVendor.phone) { toast.error("Vendor name and phone required"); return; }
     setAddingVendor(true);
     try {
-      const r = await api.post("/vendors", newVendor);
+      const r = await api.post("/vendors", { ...newVendor, vendor_type: "parts" });
       const created = r.data;
       setVendors(prev => [...prev, created]);
       setForm(f => ({ ...f, vendor_id: created.id }));

@@ -1479,9 +1479,11 @@ async def delete_vendor(vid: str, cu: dict = Depends(admin_only)):
     return {"message": "Deleted"}
 
 @api_router.get("/vendors/search")
-async def search_vendors(q: str = "", cu: dict = Depends(require("vendor_lookup", "view"))):
+async def search_vendors(q: str = "", vendor_type: Optional[str] = None, cu: dict = Depends(require("vendor_lookup", "view"))):
     """Fast vendor name search for autocomplete."""
-    vendors = await db.vendors.find({}, {"_id": 0, "id": 1, "name": 1, "phone": 1}).to_list(200)
+    vendors = await db.vendors.find({}, {"_id": 0, "id": 1, "name": 1, "phone": 1, "vendor_type": 1}).to_list(200)
+    if vendor_type:
+        vendors = [v for v in vendors if v.get("vendor_type", "both") in (vendor_type, "both")]
     if q:
         q_lower = q.lower()
         vendors = [v for v in vendors if q_lower in v.get("name", "").lower()]
