@@ -472,31 +472,37 @@ export default function JobCards() {
                 </label>
                 <p className="text-[11px] text-slate-400 mb-2 -mt-1">For parts bought specifically for this vehicle that aren't in your spare parts inventory.</p>
                 <div className="flex gap-2">
-                  <input
-                    value={externalPart.name}
-                    onChange={e => setExternalPart({ ...externalPart, name: e.target.value })}
-                    placeholder="Part name"
-                    className={`${inp} flex-1`}
-                    data-testid="external-part-name-input"
-                  />
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={externalPart.quantity}
-                    onChange={e => setExternalPart({ ...externalPart, quantity: e.target.value })}
-                    placeholder="Qty"
-                    className={`${inp} w-16`}
-                    data-testid="external-part-qty-input"
-                  />
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={externalPart.unit_cost}
-                    onChange={e => setExternalPart({ ...externalPart, unit_cost: e.target.value })}
-                    placeholder="Cost"
-                    className={`${inp} w-24`}
-                    data-testid="external-part-cost-input"
-                  />
+                  <div className="flex-1 min-w-0">
+                    <input
+                      value={externalPart.name}
+                      onChange={e => setExternalPart({ ...externalPart, name: e.target.value })}
+                      placeholder="Part name"
+                      className={inp}
+                      data-testid="external-part-name-input"
+                    />
+                  </div>
+                  <div className="w-16 shrink-0">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={externalPart.quantity}
+                      onChange={e => setExternalPart({ ...externalPart, quantity: e.target.value })}
+                      placeholder="Qty"
+                      className={inp}
+                      data-testid="external-part-qty-input"
+                    />
+                  </div>
+                  <div className="w-24 shrink-0">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={externalPart.unit_cost}
+                      onChange={e => setExternalPart({ ...externalPart, unit_cost: e.target.value })}
+                      placeholder="Cost"
+                      className={inp}
+                      data-testid="external-part-cost-input"
+                    />
+                  </div>
                   <button type="button" onClick={addExternalPartToJob} className="h-9 px-3 bg-orange-100 text-orange-700 text-xs font-semibold rounded-lg hover:bg-orange-200 transition-colors shrink-0" data-testid="add-external-part-btn">
                     Add
                   </button>
