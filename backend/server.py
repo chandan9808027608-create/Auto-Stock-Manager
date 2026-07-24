@@ -2014,7 +2014,7 @@ class SparePartUpdate(BaseModel):
 async def get_spare_parts(category: Optional[str] = None, low_stock: Optional[bool] = None, cu: dict = Depends(require("spare_parts", "view"))):
     query = {}
     if category: query["category"] = category
-    parts = await db.spare_parts.find(query, {"_id": 0}).to_list(1000)
+    parts = await db.spare_parts.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     if low_stock: parts = [p for p in parts if p.get("quantity", 0) <= p.get("min_stock_alert", 2)]
     # Batch-fetch vendor names
     vendor_ids = {p["vendor_id"] for p in parts if p.get("vendor_id")}
