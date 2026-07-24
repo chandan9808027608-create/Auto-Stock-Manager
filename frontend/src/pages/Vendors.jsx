@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Phone, MapPin, AlertTriangle, Edit, Trash2, CreditCard, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Phone, MapPin, AlertTriangle, Edit, Trash2, CreditCard, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { toast } from "sonner";
 import api from "../utils/api";
 import { formatNPR, formatDateDual } from "../utils/helpers";
@@ -16,6 +16,7 @@ export default function Vendors() {
   const [payForm, setPayForm] = useState({ vendor_id: "", amount: "", payment_date: "", notes: "" });
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
 
   const fetchVendors = useCallback(async () => {
     try { const r = await api.get("/vendors"); setVendors(r.data); }
@@ -66,6 +67,14 @@ export default function Vendors() {
 
   const totalDue = vendors.reduce((s, v) => s + (v.remaining_due || 0), 0);
   const inp = "w-full h-9 px-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const q = search.trim().toLowerCase();
+  const filteredVendors = q
+    ? vendors.filter(v =>
+        v.name?.toLowerCase().includes(q) ||
+        v.phone?.toLowerCase().includes(q) ||
+        v.address?.toLowerCase().includes(q)
+      )
+    : vendors;
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -95,6 +104,21 @@ export default function Vendors() {
         </div>
       </div>
 
+      {/* Search */}
+      {!loading && vendors.length > 0 && (
+        <div className="relative">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search vendors by name, phone, or address..."
+            className="w-full h-10 pl-9 pr-3 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            data-testid="vendor-search-input"
+          />
+        </div>
+      )}
+
       {/* Vendor List */}
       {loading ? (
         <div className="flex items-center justify-center h-48"><div className="animate-spin w-7 h-7 border-4 border-blue-600 border-t-transparent rounded-full" /></div>
@@ -103,9 +127,14 @@ export default function Vendors() {
           <p className="font-medium">No vendors yet</p>
           <p className="text-sm mt-1">Add vendors to track purchases and payments</p>
         </div>
+      ) : filteredVendors.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-500">
+          <p className="font-medium">No vendors match "{search}"</p>
+          <p className="text-sm mt-1">Try a different name, phone, or address</p>
+        </div>
       ) : (
         <div className="space-y-3">
-          {vendors.map(v => (
+          {filteredVendors.map(v => (
             <div key={v.id} data-testid="vendor-card" className={`bg-white rounded-xl border shadow-sm overflow-hidden ${v.remaining_due > 0 ? "border-red-200" : "border-slate-200"}`}>
               <div className="p-5">
                 <div className="flex items-start justify-between">
