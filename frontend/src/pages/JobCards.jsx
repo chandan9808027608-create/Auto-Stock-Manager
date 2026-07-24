@@ -273,7 +273,7 @@ export default function JobCards() {
             const overBudget = job.actual_cost && job.actual_cost > job.estimated_cost;
             const partsTotal = job.parts?.reduce((s, p) => s + p.quantity * p.unit_cost, 0) || 0;
             return (
-              <div key={job.id} data-testid="job-card" className={`bg-white rounded-xl border ${overBudget ? "border-red-200" : "border-slate-200"} shadow-sm p-5 hover:shadow-md transition-shadow`}>
+              <div key={job.id} data-testid="job-card" className={`flex flex-col bg-white rounded-xl border ${overBudget ? "border-red-200" : "border-slate-200"} shadow-sm p-5 hover:shadow-md transition-shadow`}>
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <div className="text-xs font-mono text-slate-400">{job.job_number}</div>
@@ -302,12 +302,14 @@ export default function JobCards() {
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 mb-1.5">
                       <Package size={11} /> Parts Used
                     </div>
-                    {job.parts.map((p, i) => (
-                      <div key={i} className="flex justify-between text-xs text-slate-600 py-0.5">
-                        <span>{p.part_name} × {p.quantity}{(p.external || !p.part_id) && <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-orange-500">External</span>}</span>
-                        <span className="font-medium">{formatNPR(p.quantity * p.unit_cost)}</span>
-                      </div>
-                    ))}
+                    <div className="max-h-40 overflow-y-auto pr-0.5">
+                      {job.parts.map((p, i) => (
+                        <div key={i} className="flex justify-between text-xs text-slate-600 py-0.5">
+                          <span>{p.part_name} × {p.quantity}{(p.external || !p.part_id) && <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-orange-500">External</span>}</span>
+                          <span className="font-medium">{formatNPR(p.quantity * p.unit_cost)}</span>
+                        </div>
+                      ))}
+                    </div>
                     <div className="flex justify-between text-xs font-bold text-slate-800 border-t border-slate-200 mt-1 pt-1">
                       <span>Parts Total</span>
                       <span className="text-blue-700">{formatNPR(partsTotal)}</span>
@@ -317,7 +319,7 @@ export default function JobCards() {
 
                 {overBudget && <div className="text-xs text-red-600 font-medium mb-3">Over budget by {formatNPR(job.actual_cost - job.estimated_cost)}</div>}
 
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="mt-auto flex items-center gap-2 flex-wrap pt-1">
                   {canEdit && job.status === "pending" && (
                     <button onClick={() => updateStatus(job.id, "in_progress")} disabled={updating === job.id} className="px-2.5 py-1.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-lg hover:bg-blue-200 transition-colors disabled:opacity-60">
                       Start Work
